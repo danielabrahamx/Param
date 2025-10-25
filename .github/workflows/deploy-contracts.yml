@@ -1,0 +1,84 @@
+name: Deploy Contracts
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'contracts/**' ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: contracts/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd contracts
+        npm ci
+
+    - name: Run tests
+      run: |
+        cd contracts
+        npx hardhat test
+
+  deploy-polygon:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: polygon-amoy
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: contracts/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd contracts
+        npm ci
+
+    - name: Deploy to Polygon Amoy
+      run: |
+        cd contracts
+        npx hardhat run scripts/deploy.js --network polygonAmoy
+      env:
+        PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+
+  deploy-avalanche:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: avalanche-fuji
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: contracts/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd contracts
+        npm ci
+
+    - name: Deploy to Avalanche Fuji
+      run: |
+        cd contracts
+        npx hardhat run scripts/deploy.js --network avalancheFuji
+      env:
+        PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}

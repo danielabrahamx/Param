@@ -1,0 +1,22 @@
+{
+  "name": "param-backend",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "api-gateway",
+    "policy-service",
+    "oracle-service",
+    "claims-service",
+    "notification-service",
+    "analytics-service"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=api-gateway\" \"npm run dev --workspace=policy-service\" \"npm run dev --workspace=oracle-service\" \"npm run dev --workspace=claims-service\" \"npm run dev --workspace=notification-service\" \"npm run dev --workspace=analytics-service\"",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    environment:
+      POSTGRES_DB: param
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  policy-service:
+    build: ./policy-service
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgres://user:password@postgres:5432/param
+      - RPC_URL=${RPC_URL}
+      - PRIVATE_KEY=${PRIVATE_KEY}
+      - POLICY_FACTORY_ADDRESS=${POLICY_FACTORY_ADDRESS}
+      - POOL_ADDRESS=${POOL_ADDRESS}
+    depends_on:
+      - postgres
+
+  oracle-service:
+    build: ./oracle-service
+    ports:
+      - "3002:3002"
+    environment:
+      - DATABASE_URL=postgres://user:password@postgres:5432/param
+      - REDIS_HOST=redis
+      - RPC_URL=${RPC_URL}
+      - PRIVATE_KEY=${PRIVATE_KEY}
+      - ORACLE_REGISTRY_ADDRESS=${ORACLE_REGISTRY_ADDRESS}
+      - REGIONS=${REGIONS}
+    depends_on:
+      - postgres
+      - redis
+
+  claims-service:
+    build: ./claims-service
+    ports:
+      - "3003:3003"
+    environment:
+      - DATABASE_URL=postgres://user:password@postgres:5432/param
+      - RPC_URL=${RPC_URL}
+      - PRIVATE_KEY=${PRIVATE_KEY}
+      - ORACLE_ADDRESS=${ORACLE_REGISTRY_ADDRESS}
+      - POOL_ADDRESS=${POOL_ADDRESS}
+      - GOVERNANCE_ADDRESS=${GOVERNANCE_ADDRESS}
+      - PORT=3003
+    depends_on:
+      - postgres
+
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "3004:3004"
+    environment:
+      - DATABASE_URL=postgres://user:password@postgres:5432/param
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3004
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - SENDGRID_FROM_EMAIL=${SENDGRID_FROM_EMAIL}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_SUBJECT=${VAPID_SUBJECT}
+    depends_on:
+      - postgres
+      - redis
+
+  analytics-service:
+    build: ./analytics-service
+    ports:
+      - "3005:3005"
+    environment:
+      - DATABASE_URL=postgres://user:password@postgres:5432/param
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3005
+    depends_on:
+      - postgres
+      - redis
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "3000:3000"
+    depends_on:
+      - policy-service
+      - oracle-service
+      - claims-service
+      - notification-service
+      - analytics-service
+
+volumes:
+  postgres_data:
