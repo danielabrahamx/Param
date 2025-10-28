@@ -12,6 +12,13 @@ export default defineConfig({
       host: process.env.REPLIT_DEV_DOMAIN,
       clientPort: 443,
       protocol: 'wss'
+    },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false
+      }
     }
   }
 })

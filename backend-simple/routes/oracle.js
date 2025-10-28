@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 
-router.get('/flood-level', async (req, res) => {
+router.get('/flood-level/:gaugeId?', async (req, res) => {
   try {
     const result = await db.query(
       "SELECT value FROM oracle_config WHERE key = 'current_flood_level'"
@@ -26,7 +26,8 @@ router.get('/flood-level', async (req, res) => {
         currentLevel: floodLevel,
         threshold: threshold,
         status: floodLevel >= threshold ? 'FLOOD' : 'NORMAL',
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
+        gaugeId: req.params.gaugeId || 'default'
       }
     });
   } catch (error) {

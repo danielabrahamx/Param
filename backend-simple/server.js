@@ -26,9 +26,9 @@ app.get('/health', (req, res) => {
   });
 });
 
-app.use('/api/policies', policiesRouter);
-app.use('/api/claims', claimsRouter);
-app.use('/api/oracle', oracleRouter);
+app.use('/api/v1/policies', policiesRouter);
+app.use('/api/v1/claims', claimsRouter);
+app.use('/api/v1/oracle', oracleRouter);
 
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);

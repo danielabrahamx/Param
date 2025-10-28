@@ -92,6 +92,126 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.post('/create', async (req, res) => {
+  try {
+    const { 
+      policyId,
+      policyAddress,
+      policyholder,
+      amount, 
+      txHash,
+      floodLevel 
+    } = req.body;
+
+    if (!policyAddress && !policyId) {
+      return res.status(400).json({ 
+        error: 'Missing required field: policyAddress or policyId' 
+      });
+    }
+
+    let policy;
+    if (policyAddress) {
+      const policyResult = await db.query(
+        'SELECT id, policy_address, coverage FROM policies WHERE policy_address = $1',
+        [policyAddress]
+      );
+      if (policyResult.rows.length > 0) {
+        policy = policyResult.rows[0];
+      }
+    } else if (policyId) {
+      const policyResult = await db.query(
+        'SELECT id, policy_address, coverage FROM policies WHERE id = $1',
+        [policyId]
+      );
+      if (policyResult.rows.length > 0) {
+        policy = policyResult.rows[0];
+      }
+    }
+
+    if (!policy) {
+      return res.status(404).json({ 
+        error: 'Policy not found' 
+      });
+    }
+
+    const amountAtto = amount ? BigInt(amount).toString() : policy.coverage;
+
+    const result = await db.query(
+      `INSERT INTO claims (policy_id, policy_address, amount, tx_hash, flood_level, status)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [policy.id, policy.policy_address, amountAtto, txHash, floodLevel, 'completed']
+    );
+
+    await db.query(
+      'UPDATE policies SET claimed = true WHERE id = $1',
+      [policy.id]
+    );
+
+    const claim = result.rows[0];
+    console.log('✅ Claim created:', claim.id);
+
+    res.status(201).json({
+      success: true,
+      claim: {
+        ...claim,
+        amount: claim.amount
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error creating claim:', error);
+    res.status(500).json({ 
+      error: 'Failed to create claim',
+      message: error.message 
+    });
+  }
+});
+
+router.get('/pool/status', async (req, res) => {
+  try {
+    const totalPoliciesResult = await db.query(
+      'SELECT COUNT(*) as count, COALESCE(SUM(coverage), 0) as total_coverage FROM policies WHERE active = true'
+    );
+
+    const totalClaimsResult = await db.query(
+      'SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total_paid FROM claims WHERE status = $1',
+      ['completed']
+    );
+
+    const premiumsResult = await db.query(
+      'SELECT COALESCE(SUM(premium), 0) as total_premiums FROM policies'
+    );
+
+    const totalPolicies = parseInt(totalPoliciesResult.rows[0].count);
+    const totalCoverage = totalPoliciesResult.rows[0].total_coverage;
+    const totalClaims = parseInt(totalClaimsResult.rows[0].count);
+    const totalPaid = totalClaimsResult.rows[0].total_paid;
+    const totalPremiums = premiumsResult.rows[0].total_premiums;
+
+    const poolBalance = BigInt(totalPremiums) - BigInt(totalPaid);
+
+    res.json({
+      success: true,
+      data: {
+        totalPolicies,
+        totalClaims,
+        poolBalance: poolBalance.toString(),
+        totalCoverage: totalCoverage.toString(),
+        totalPaid: totalPaid.toString(),
+        totalPremiums: totalPremiums.toString(),
+        utilizationRate: totalPolicies > 0 ? (totalClaims / totalPolicies * 100).toFixed(2) : 0,
+        lastUpdated: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error fetching pool status:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch pool status',
+      message: error.message 
+    });
+  }
+});
+
 router.get('/policy/:policyAddress', async (req, res) => {
   try {
     const { policyAddress } = req.params;
