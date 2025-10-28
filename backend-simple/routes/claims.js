@@ -241,7 +241,30 @@ router.get('/pool/status', async (req, res) => {
     const totalPaid = totalClaimsResult.rows[0].total_paid;
     const totalPremiums = premiumsResult.rows[0].total_premiums;
 
-    const poolBalance = BigInt(totalPremiums) - BigInt(totalPaid);
+    let onChainBalance = '0';
+    try {
+      const poolAddress = '0x190e9ed37547edf2ebf3c828966f3708a5c3605f';
+      const response = await fetch('https://testnet.hashio.io/api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getBalance',
+          params: [poolAddress, 'latest'],
+          id: 1
+        })
+      });
+      const data = await response.json();
+      if (data.result) {
+        onChainBalance = BigInt(data.result).toString();
+        console.log('🔗 Fetched on-chain pool balance:', onChainBalance, 'atto-HBAR');
+      }
+    } catch (error) {
+      console.warn('⚠️  Failed to fetch on-chain balance, using database fallback:', error.message);
+      onChainBalance = totalPremiums;
+    }
+
+    const poolBalance = BigInt(onChainBalance) - BigInt(totalPaid);
 
     res.json({
       success: true,
@@ -249,6 +272,7 @@ router.get('/pool/status', async (req, res) => {
         totalPolicies,
         totalClaims,
         poolBalance: poolBalance.toString(),
+        onChainBalance: onChainBalance,
         totalCoverage: totalCoverage.toString(),
         totalPaid: totalPaid.toString(),
         totalPremiums: totalPremiums.toString(),

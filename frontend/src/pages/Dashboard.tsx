@@ -148,7 +148,7 @@ export default function Dashboard() {
       };
       
       setClaimsPoolStatus({
-        totalCapacity: attoToHbar(poolData.totalPremiums || '0'),
+        totalCapacity: attoToHbar(poolData.onChainBalance || poolData.totalPremiums || '0'),
         availableBalance: attoToHbar(poolData.poolBalance || '0'),
         totalClaimsProcessed: attoToHbar(poolData.totalPaid || '0')
       })
