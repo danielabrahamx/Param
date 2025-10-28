@@ -215,9 +215,16 @@ To test the complete platform with backend integration:
 
 ## Recent Changes (Replit Setup)
 
-### October 28, 2025 - Production Ready: Complete Insurance Purchase Flow ✅
+### October 28, 2025 - Production Ready: Real-Time USGS Flood Data ✅
 
-**LATEST: All Critical Issues Fixed:**
+**LATEST: Live USGS API Integration:**
+- ✅ **Real-Time Flood Data**: Backend now fetches live water levels from USGS API
+- ✅ **API Endpoint**: `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=01646500&parameterCd=00065`
+- ✅ **Current Reading**: 2.68 feet (268 in scaled units) - updates every 15 minutes
+- ✅ **Fallback Mode**: If USGS API fails, falls back to database values
+- ✅ **No Hardcoded Values**: All configuration (threshold, unit, level) stored in database
+
+**Previous Critical Issues Fixed:**
 - ✅ **Backend URL Fixed**: Changed from localhost to Vite proxy path (`/api`)
 - ✅ **Duplicate API Calls Fixed**: Implemented transaction receipt tracking to prevent multiple saves
 - ✅ **Database Response Format Fixed**: Proper atto-HBAR to HBAR conversion for display
