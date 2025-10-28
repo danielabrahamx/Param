@@ -67,6 +67,19 @@ export default function Dashboard() {
     },
   ]
 
+  const poolAbi = [
+    {
+      inputs: [
+        { internalType: 'address payable', name: 'policyAddress', type: 'address' },
+        { internalType: 'uint256', name: 'coverageAmountWei', type: 'uint256' }
+      ],
+      name: 'fundPolicy',
+      outputs: [],
+      stateMutability: 'nonpayable',
+      type: 'function',
+    },
+  ]
+
   // ABI for GovernanceContract floodThreshold
   const governanceAbi = [
     {
@@ -169,6 +182,81 @@ export default function Dashboard() {
 
     try {
       setClaimingPolicyId(policy.id)
+      
+      // Check policy contract balance before attempting claim
+      const policyBalanceResponse = await fetch('https://testnet.hashio.io/api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getBalance',
+          params: [policy.policyAddress, 'latest'],
+          id: 1
+        })
+      })
+      
+      const balanceData = await policyBalanceResponse.json()
+      const policyBalanceWei = BigInt(balanceData.result || '0')
+      const coverageWei = BigInt(policy.coverage) * BigInt(1e18)
+      
+      console.log(' Policy balance check:', {
+        policyAddress: policy.policyAddress,
+        policyBalance: policyBalanceWei.toString(),
+        coverageRequired: coverageWei.toString(),
+        policyBalanceHBAR: (Number(policyBalanceWei) / 1e18).toFixed(2),
+        coverageRequiredHBAR: policy.coverage,
+      })
+      
+      // Check if policy has sufficient balance for payout
+      if (policyBalanceWei < coverageWei) {
+        const shortfall = coverageWei - policyBalanceWei
+        const shortfallHBAR = (Number(shortfall) / 1e18).toFixed(2)
+        
+        const shouldFund = window.confirm(
+          `❌ Policy Contract Underfunded\n\n` +
+          `Policy Address: ${policy.policyAddress}\n` +
+          `Required Coverage: ${policy.coverage} HBAR\n` +
+          `Current Balance: ${(Number(policyBalanceWei) / 1e18).toFixed(2)} HBAR\n` +
+          `Shortfall: ${shortfallHBAR} HBAR\n\n` +
+          `The InsurancePool has funds but this policy wasn't funded during creation.\n\n` +
+          `Would you like to fund this policy now from the InsurancePool?\n\n` +
+          `Click OK to fund, Cancel to abort.`
+        )
+        
+        if (shouldFund) {
+          try {
+            // Call pool.fundPolicy() to transfer coverage from pool to policy
+            const poolAddress = import.meta.env.VITE_POOL_ADDRESS as `0x${string}`
+            
+            console.log('🏦 Funding policy from InsurancePool:', {
+              poolAddress,
+              policyAddress: policy.policyAddress,
+              coverageWei: coverageWei.toString(),
+              coverageHBAR: policy.coverage,
+            })
+            
+            writeContract({
+              address: poolAddress,
+              abi: poolAbi,
+              functionName: 'fundPolicy',
+              args: [policy.policyAddress as `0x${string}`, coverageWei],
+            })
+            
+            alert('⏳ Funding transaction sent! Please wait for confirmation, then try claiming again.')
+            setClaimingPolicyId(null)
+            return
+          } catch (error: any) {
+            console.error('Failed to fund policy:', error)
+            alert(`❌ Failed to fund policy: ${error.message}`)
+            setClaimingPolicyId(null)
+            return
+          }
+        } else {
+          setClaimingPolicyId(null)
+          return
+        }
+      }
+      
       console.log(' Triggering blockchain payout for policy:', {
         policyId: policy.id,
         policyAddress: policy.policyAddress,
