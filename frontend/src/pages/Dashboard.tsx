@@ -124,8 +124,8 @@ export default function Dashboard() {
         axios.get(`${backendUrl}/api/v1/claims/pool/status`),
       ])
 
-      // Handle policies response - check if it has success/data wrapper
-      const allPolicies = policiesRes.data.success ? policiesRes.data.data : policiesRes.data;
+      // Handle policies response - backend returns { success: true, policies: [...] }
+      const allPolicies = policiesRes.data.success ? policiesRes.data.policies : policiesRes.data;
       
       // Filter policies to only show those belonging to the connected wallet
       const userPolicies = allPolicies.filter((policy: Policy) =>
@@ -308,13 +308,13 @@ export default function Dashboard() {
 
   const getDataSourceInfo = () => {
     return {
-      source: floodData?.dataSource || 'USGS',
-      station: floodData?.station || 'POTOMAC RIVER NEAR WASHINGTON, DC',
-      stationId: floodData?.stationId || '01646500',
-      usgsLink: (floodData as any)?.usgsLink || 'https://waterdata.usgs.gov/monitoring-location/01646500',
-      updateFrequency: floodData?.updateFrequency || '15 minutes',
-      unit: floodData?.unit || 'feet x 100',
-      lastUpdate: floodData?.timestamp ? new Date(floodData.timestamp).toLocaleString() : 'N/A'
+      source: floodData?.dataSource || 'Loading...',
+      station: floodData?.station || 'Loading...',
+      stationId: floodData?.stationId || '',
+      usgsLink: (floodData as any)?.usgsLink || '',
+      updateFrequency: floodData?.updateFrequency || 'Real-time',
+      unit: floodData?.unit || 'units',
+      lastUpdate: floodData?.timestamp ? new Date(floodData.timestamp).toLocaleString() : 'Loading...'
     }
   }
 

@@ -70,10 +70,29 @@ router.get('/', async (req, res) => {
       'SELECT * FROM policies ORDER BY created_at DESC'
     );
 
+    // Convert atto-HBAR back to HBAR for display
+    const attoToHbar = (atto) => {
+      if (!atto) return 0;
+      const attoStr = String(atto);
+      const whole = attoStr.slice(0, -18) || '0';
+      const decimal = attoStr.slice(-18).padStart(18, '0');
+      // Trim trailing zeros for cleaner display
+      const trimmedDecimal = decimal.replace(/0+$/, '').slice(0, 4);
+      return parseFloat(whole + (trimmedDecimal ? '.' + trimmedDecimal : ''));
+    };
+
     const policies = result.rows.map(policy => ({
-      ...policy,
-      coverage: policy.coverage,
-      premium: policy.premium
+      id: policy.id,
+      policyAddress: policy.policy_address,
+      policyholder: policy.policyholder,
+      coverage: attoToHbar(policy.coverage),
+      premium: attoToHbar(policy.premium),
+      threshold: policy.threshold,
+      gaugeStationId: policy.gauge_station_id,
+      active: policy.active,
+      payoutTriggered: policy.claimed,
+      createdAt: policy.created_at,
+      updatedAt: policy.updated_at
     }));
 
     res.json({ 
@@ -105,13 +124,31 @@ router.get('/:address', async (req, res) => {
       });
     }
 
+    // Convert atto-HBAR back to HBAR for display
+    const attoToHbar = (atto) => {
+      if (!atto) return 0;
+      const attoStr = String(atto);
+      const whole = attoStr.slice(0, -18) || '0';
+      const decimal = attoStr.slice(-18).padStart(18, '0');
+      const trimmedDecimal = decimal.replace(/0+$/, '').slice(0, 4);
+      return parseFloat(whole + (trimmedDecimal ? '.' + trimmedDecimal : ''));
+    };
+
     const policy = result.rows[0];
     res.json({
       success: true,
       policy: {
-        ...policy,
-        coverage: policy.coverage,
-        premium: policy.premium
+        id: policy.id,
+        policyAddress: policy.policy_address,
+        policyholder: policy.policyholder,
+        coverage: attoToHbar(policy.coverage),
+        premium: attoToHbar(policy.premium),
+        threshold: policy.threshold,
+        gaugeStationId: policy.gauge_station_id,
+        active: policy.active,
+        payoutTriggered: policy.claimed,
+        createdAt: policy.created_at,
+        updatedAt: policy.updated_at
       }
     });
   } catch (error) {
