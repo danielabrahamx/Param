@@ -73,7 +73,7 @@ The `frontend/vite.config.ts` is configured for Replit's environment:
 ## How It Works
 
 ### Parametric Insurance Model
-1. **Oracle Data**: Real-time flood level data from USGS (United States Geological Survey)
+1. **Oracle Data**: Water level monitoring from the Nile River at Aswan High Dam, Egypt (Lake Nasser)
 2. **Smart Contracts**: Automated claim processing based on predefined thresholds
 3. **Decentralized Pool**: Community-funded insurance pool on Hedera blockchain
 4. **Instant Payouts**: Automatic claims when flood levels breach thresholds
@@ -214,6 +214,28 @@ To test the complete platform with backend integration:
 ---
 
 ## Recent Changes (Replit Setup)
+
+### October 28, 2025 - Monitoring Station Updated to Nile River, Aswan High Dam ✅
+
+**Monitoring Station Change:**
+- ✅ **Updated Oracle Data Source**: Replaced Washington DC Potomac River station with Nile River at Aswan High Dam, Egypt
+- ✅ **Location**: Lake Nasser water level monitoring at Aswan High Dam
+- ✅ **Station ID**: Changed from `01646500` (USGS) to `ASWAN-001`
+- ✅ **Units**: Updated from "feet x 100" to "centimeters above MSL (Mean Sea Level)"
+- ✅ **Thresholds**: Lake Nasser operates between 147-182 meters MSL (14700-18200 cm)
+  - Warning threshold: 178m (17800 cm)
+  - Critical threshold: 181m (18100 cm)
+- ✅ **Data Source**: Nile Basin Initiative / Egypt Ministry of Water Resources
+- ✅ **Consistent Mapping**: All oracle endpoints (flood-level, flood-history, thresholds) use unified station ID mapping
+- ✅ **Backend Files Updated**:
+  - `backend-simple/routes/oracle.js` (active/running backend)
+  - `backend/oracle-service/src/routes/oracle.ts` (reference microservice)
+
+**Why Aswan High Dam?**
+- One of Africa's most important water monitoring locations
+- Manages Lake Nasser, one of the world's largest man-made reservoirs
+- Critical infrastructure for millions of people across northeastern Africa
+- Significant flood risk management and agricultural water supply
 
 ### October 28, 2025 - Backend Complete with Security Implementation ✅
 

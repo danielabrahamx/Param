@@ -20,18 +20,22 @@ router.get('/flood-level/:gaugeId?', async (req, res) => {
       ? parseInt(thresholdResult.rows[0].value) 
       : 1500;
 
-    const gaugeId = req.params.gaugeId || '01646500';
+    const gaugeId = req.params.gaugeId || 'ASWAN-001';
+    const stationId = gaugeId === '1' ? 'ASWAN-001' : gaugeId;
 
     res.json({
-      location: gaugeId,
+      location: stationId,
       level: floodLevel,
       timestamp: new Date().toISOString(),
-      dataSource: 'USGS Water Services',
-      station: 'POTOMAC RIVER NEAR WASH, DC LITTLE FALLS PUMP STA',
-      stationId: gaugeId,
-      usgsLink: `https://waterdata.usgs.gov/monitoring-location/${gaugeId}`,
-      updateFrequency: '15-60 minutes',
-      unit: 'feet x 100',
+      dataSource: 'Nile Basin Initiative / Egypt Ministry of Water Resources',
+      station: 'NILE RIVER AT ASWAN HIGH DAM, LAKE NASSER',
+      stationId: stationId,
+      country: 'Egypt',
+      river: 'Nile River',
+      infoLink: 'https://nilebasin.org',
+      updateFrequency: 'Daily',
+      unit: 'centimeters above MSL',
+      description: 'Lake Nasser water level monitoring at Aswan High Dam',
       threshold: threshold,
       status: floodLevel && floodLevel >= threshold ? 'FLOOD' : 'NORMAL'
     });
