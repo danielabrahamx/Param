@@ -11,16 +11,14 @@ router.post('/', async (req, res) => {
       floodLevel 
     } = req.body;
 
-    if (!policyAddress || !amount) {
+    if (!policyAddress || !amount || !txHash) {
       return res.status(400).json({ 
-        error: 'Missing required fields: policyAddress, amount' 
+        error: 'Missing required fields: policyAddress, amount, txHash' 
       });
     }
 
-    const amountAtto = BigInt(amount).toString();
-
     const policyResult = await db.query(
-      'SELECT id, policy_address FROM policies WHERE policy_address = $1',
+      'SELECT id, policy_address, claimed, coverage FROM policies WHERE policy_address = $1',
       [policyAddress]
     );
 
@@ -31,6 +29,27 @@ router.post('/', async (req, res) => {
     }
 
     const policy = policyResult.rows[0];
+
+    if (policy.claimed) {
+      return res.status(409).json({ 
+        error: 'Policy already claimed',
+        message: 'This policy has already submitted a claim'
+      });
+    }
+
+    const existingClaim = await db.query(
+      'SELECT id FROM claims WHERE tx_hash = $1',
+      [txHash]
+    );
+
+    if (existingClaim.rows.length > 0) {
+      return res.status(409).json({ 
+        error: 'Duplicate transaction',
+        message: 'A claim with this transaction hash already exists'
+      });
+    }
+
+    const amountAtto = BigInt(amount).toString();
 
     const result = await db.query(
       `INSERT INTO claims (policy_id, policy_address, amount, tx_hash, flood_level, status)
@@ -45,7 +64,7 @@ router.post('/', async (req, res) => {
     );
 
     const claim = result.rows[0];
-    console.log('✅ Claim created:', claim.id);
+    console.log('✅ Claim created:', claim.id, 'for tx:', txHash);
 
     res.status(201).json({
       success: true,
@@ -109,10 +128,16 @@ router.post('/create', async (req, res) => {
       });
     }
 
+    if (!txHash) {
+      return res.status(400).json({ 
+        error: 'Missing required field: txHash (blockchain transaction hash)' 
+      });
+    }
+
     let policy;
     if (policyAddress) {
       const policyResult = await db.query(
-        'SELECT id, policy_address, coverage FROM policies WHERE policy_address = $1',
+        'SELECT id, policy_address, coverage, claimed FROM policies WHERE policy_address = $1',
         [policyAddress]
       );
       if (policyResult.rows.length > 0) {
@@ -120,7 +145,7 @@ router.post('/create', async (req, res) => {
       }
     } else if (policyId) {
       const policyResult = await db.query(
-        'SELECT id, policy_address, coverage FROM policies WHERE id = $1',
+        'SELECT id, policy_address, coverage, claimed FROM policies WHERE id = $1',
         [policyId]
       );
       if (policyResult.rows.length > 0) {
@@ -131,6 +156,25 @@ router.post('/create', async (req, res) => {
     if (!policy) {
       return res.status(404).json({ 
         error: 'Policy not found' 
+      });
+    }
+
+    if (policy.claimed) {
+      return res.status(409).json({ 
+        error: 'Policy already claimed',
+        message: 'This policy has already submitted a claim'
+      });
+    }
+
+    const existingClaim = await db.query(
+      'SELECT id FROM claims WHERE tx_hash = $1',
+      [txHash]
+    );
+
+    if (existingClaim.rows.length > 0) {
+      return res.status(409).json({ 
+        error: 'Duplicate transaction',
+        message: 'A claim with this transaction hash already exists'
       });
     }
 
@@ -149,7 +193,7 @@ router.post('/create', async (req, res) => {
     );
 
     const claim = result.rows[0];
-    console.log('✅ Claim created:', claim.id);
+    console.log('✅ Claim created:', claim.id, 'for tx:', txHash);
 
     res.status(201).json({
       success: true,
