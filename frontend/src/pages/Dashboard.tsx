@@ -364,12 +364,21 @@ export default function Dashboard() {
             <h1 className="text-4xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-gray-600 mt-1">Welcome back, {address?.slice(0, 6)}...{address?.slice(-4)}</p>
           </div>
-          <button
-            onClick={() => navigate('/buy-insurance')}
-            className="py-3 px-6 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-semibold rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg"
-          >
-            + New Insurance
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => navigate('/admin/funding')}
+              className="py-3 px-6 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg"
+              title="Admin: Fund underfunded policies"
+            >
+              🔧 Admin Funding
+            </button>
+            <button
+              onClick={() => navigate('/buy-insurance')}
+              className="py-3 px-6 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-semibold rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg"
+            >
+              + New Insurance
+            </button>
+          </div>
         </div>
       </div>
 
