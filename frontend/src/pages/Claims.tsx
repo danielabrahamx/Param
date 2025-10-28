@@ -3,9 +3,14 @@ import { useNavigate } from 'react-router-dom'
 
 interface Claim {
   id: number
-  policyId: string
+  policy_id: number
+  policy_address: string
   amount: string
-  status: 'pending' | 'approved' | 'rejected'
+  status: string
+  policyholder: string
+  tx_hash: string
+  flood_level?: number
+  created_at: string
 }
 
 function Claims() {
@@ -23,57 +28,52 @@ function Claims() {
     try {
       const response = await fetch(`${backendUrl}/api/v1/claims`)
       const data = await response.json()
-      setClaims(data)
+      setClaims(data.claims || [])
     } catch (error) {
       console.error('Error fetching claims:', error)
+      setClaims([])
     } finally {
       setLoading(false)
     }
   }
 
-  const handleReview = async (id: number, status: string) => {
-    try {
-      await fetch(`${backendUrl}/api/v1/claims/${id}/review`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      })
-      fetchClaims()
-    } catch (error) {
-      console.error('Error updating claim:', error)
-    }
-  }
-
   const getStatusColor = (status: string) => {
-    switch(status) {
-      case 'approved':
+    switch(status.toLowerCase()) {
+      case 'completed':
         return 'bg-green-100 text-green-800'
-      case 'rejected':
-        return 'bg-red-100 text-red-800'
       case 'pending':
         return 'bg-orange-100 text-orange-800'
+      case 'rejected':
+        return 'bg-red-100 text-red-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }
   }
 
   const getStatusIcon = (status: string) => {
-    switch(status) {
-      case 'approved':
-        return '[Approved]'
-      case 'rejected':
-        return '[Rejected]'
+    switch(status.toLowerCase()) {
+      case 'completed':
+        return '✅'
       case 'pending':
-        return '[Pending]'
+        return '⏳'
+      case 'rejected':
+        return '❌'
       default:
-        return '[Unknown]'
+        return '📋'
     }
+  }
+
+  const formatAmount = (amount: string) => {
+    const attoBigInt = BigInt(amount || '0');
+    const hbarBigInt = attoBigInt / BigInt(1e18);
+    const remainder = attoBigInt % BigInt(1e18);
+    const decimal = Number(remainder) / 1e18;
+    return (Number(hbarBigInt) + decimal).toFixed(2);
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-6">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <button
           onClick={() => navigate('/dashboard')}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
@@ -85,8 +85,8 @@ function Claims() {
         </button>
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Your Claims</h1>
-          <p className="text-gray-600 mb-8">Track the status of your insurance claims</p>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Claims History</h1>
+          <p className="text-gray-600 mb-8">Track all insurance claim payouts</p>
 
           {loading ? (
             <div className="flex justify-center items-center py-12">
@@ -109,34 +109,33 @@ function Claims() {
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="text-lg font-bold text-gray-900">Claim #{claim.id}</h3>
-                      <p className="text-sm text-gray-600 mt-1">Policy: {claim.policyId.slice(0, 10)}...</p>
+                      <p className="text-sm text-gray-600 mt-1">Policy: {claim.policy_address.slice(0, 10)}...</p>
+                      <p className="text-xs text-gray-500 mt-1">Policyholder: {claim.policyholder.slice(0, 10)}...</p>
                     </div>
                     <div className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(claim.status)}`}>
                       {getStatusIcon(claim.status)} {claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}
                     </div>
                   </div>
 
-                  <div className="mb-4">
-                    <p className="text-gray-600">Claim Amount:</p>
-                    <p className="text-2xl font-bold text-gray-900">{claim.amount} HBAR</p>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <p className="text-gray-600 text-sm">Payout Amount:</p>
+                      <p className="text-2xl font-bold text-gray-900">{formatAmount(claim.amount)} HBAR</p>
+                    </div>
+                    {claim.flood_level && (
+                      <div>
+                        <p className="text-gray-600 text-sm">Flood Level:</p>
+                        <p className="text-lg font-semibold text-gray-900">{claim.flood_level}</p>
+                      </div>
+                    )}
                   </div>
 
-                  {claim.status === 'pending' && (
-                    <div className="flex gap-3 pt-4 border-t border-gray-300">
-                      <button
-                        onClick={() => handleReview(claim.id, 'approved')}
-                        className="flex-1 py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleReview(claim.id, 'rejected')}
-                        className="flex-1 py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
-                      >
-                        Reject
-                      </button>
+                  <div className="pt-3 border-t border-gray-300">
+                    <div className="text-xs text-gray-600">
+                      <p><strong>TX Hash:</strong> {claim.tx_hash}</p>
+                      <p className="mt-1"><strong>Date:</strong> {new Date(claim.created_at).toLocaleString()}</p>
                     </div>
-                  )}
+                  </div>
                 </div>
               ))}
             </div>

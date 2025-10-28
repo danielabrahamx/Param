@@ -7,6 +7,7 @@ const policiesRouter = require('./routes/policies');
 const claimsRouter = require('./routes/claims');
 const oracleRouter = require('./routes/oracle');
 const adminRouter = require('./routes/admin');
+const analyticsRouter = require('./routes/analytics');
 const { adminAuth } = require('./middleware/auth');
 
 const app = express();
@@ -31,6 +32,7 @@ app.get('/health', (req, res) => {
 app.use('/api/v1/policies', policiesRouter);
 app.use('/api/v1/claims', claimsRouter);
 app.use('/api/v1/oracle', oracleRouter);
+app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/admin', adminAuth, adminRouter);
 
 app.use((err, req, res, next) => {

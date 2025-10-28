@@ -133,7 +133,25 @@ export default function Dashboard() {
       )
       setPolicies(userPolicies)
       setFloodData(floodRes.data)
-      setClaimsPoolStatus(poolRes.data)
+      
+      // Handle pool status response
+      const poolData = poolRes.data.data || poolRes.data;
+      const attoToHbar = (atto: string) => {
+        const attoBigInt = BigInt(atto || '0');
+        const isNegative = attoBigInt < 0n;
+        const absValue = isNegative ? -attoBigInt : attoBigInt;
+        const hbarBigInt = absValue / BigInt(1e18);
+        const remainder = absValue % BigInt(1e18);
+        const decimal = Number(remainder) / 1e18;
+        const result = Number(hbarBigInt) + decimal;
+        return (isNegative ? -result : result).toFixed(2);
+      };
+      
+      setClaimsPoolStatus({
+        totalCapacity: attoToHbar(poolData.totalPremiums || '0'),
+        availableBalance: attoToHbar(poolData.poolBalance || '0'),
+        totalClaimsProcessed: attoToHbar(poolData.totalPaid || '0')
+      })
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
