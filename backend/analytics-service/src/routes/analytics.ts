@@ -15,7 +15,7 @@ router.get('/dashboard', async (_req, res) => {
       data: metrics,
     });
   } catch (error) {
-    logger.error(`Failed to get dashboard metrics: ${error}`);
+    logger.error({ error }, `Failed to get dashboard metrics`);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
@@ -35,7 +35,7 @@ router.get('/policies', async (req, res) => {
       count: data.length,
     });
   } catch (error) {
-    logger.error(`Failed to get policy metrics: ${error}`);
+    logger.error({ error }, `Failed to get policy metrics`);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
@@ -55,7 +55,7 @@ router.get('/claims', async (req, res) => {
       count: data.length,
     });
   } catch (error) {
-    logger.error(`Failed to get claim metrics: ${error}`);
+    logger.error({ error }, `Failed to get claim metrics`);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
@@ -75,7 +75,7 @@ router.get('/pool', async (req, res) => {
       count: data.length,
     });
   } catch (error) {
-    logger.error(`Failed to get pool metrics: ${error}`);
+    logger.error({ error }, `Failed to get pool metrics`);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
@@ -95,7 +95,7 @@ router.get('/revenue', async (req, res) => {
       count: data.length,
     });
   } catch (error) {
-    logger.error(`Failed to get revenue metrics: ${error}`);
+    logger.error({ error }, `Failed to get revenue metrics`);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',

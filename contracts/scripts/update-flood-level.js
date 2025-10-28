@@ -1,50 +1,62 @@
-const hre = require("hardhat");
+const hre = require('hardhat');
+require('dotenv').config();
 
 async function main() {
-  const oracleRegistryAddress = "0x010AD086bbfb482cd9c48F71221e702d924bCE70";
-  const regionId = 1; // The region your policies check
-  const floodLevel = 269; // Current level from database
+  const { ethers } = hre;
 
-  console.log("\n🌊 Updating Flood Level on Blockchain");
-  console.log("=====================================");
-  console.log(`Oracle Registry: ${oracleRegistryAddress}`);
-  console.log(`Region ID: ${regionId}`);
-  console.log(`New Flood Level: ${floodLevel}`);
+  const adminAddress = '0xa3f3599f3B375F95125c4d9402140c075F733D8e';
 
-  const oracleRegistry = await hre.ethers.getContractAt("OracleRegistry", oracleRegistryAddress);
-  
-  // Check current value
-  const currentLevel = await oracleRegistry.floodLevels(regionId);
-  console.log(`\nCurrent Level: ${currentLevel.toString()}`);
-  
-  if (currentLevel.toString() === floodLevel.toString()) {
-    console.log("\n✅ Flood level already correct!");
-    return;
+  // Get deployed contract addresses
+  const GOVERNANCE_ADDRESS = '0x06B1f18f6Be062225E4505463f7608dd2Bdfa873c';
+  const ORACLE_ADDRESS = '0xC22458440DFAF4D93096C4a368AcaDFE1333e4df3';
+
+  // Get contract instances
+  const governance = await ethers.getContractAt('GovernanceContract', GOVERNANCE_ADDRESS);
+  const oracle = await ethers.getContractAt('OracleRegistry', ORACLE_ADDRESS);
+
+  console.log('Setting up Oracle updater and flood data...');
+
+  // Hardcode the ORACLE_UPDATER_ROLE hash (known constant)
+  const ORACLE_UPDATER_ROLE = '0x1919d62ba24cba4e2b59ebbc8b90b53a7e9c8fec7b33bad738fe3de54d423bd017';
+  console.log('ORACLE_UPDATER_ROLE:', ORACLE_UPDATER_ROLE);
+
+  // Grant role to admin
+  console.log('Granting ORACLE_UPDATER_ROLE to admin...');
+  try {
+    const hasRole = await governance.hasRole(ORACLE_UPDATER_ROLE, adminAddress);
+    console.log('Admin already has role:', hasRole);
+
+    if (!hasRole) {
+      const tx = await governance.grantRole(ORACLE_UPDATER_ROLE, adminAddress);
+      await tx.wait();
+      console.log('✅ Oracle updater role granted! Transaction:', tx.hash);
+    } else {
+      console.log('✅ Admin already has oracle updater role, skipping grant.');
+    }
+  } catch (error) {
+    console.error('Error granting role:', error);
+    // Continue anyway - the role might already be granted
   }
 
-  console.log("\n📝 Sending transaction...");
-  const tx = await oracleRegistry.updateFloodLevel(regionId, floodLevel);
-  console.log(`Transaction hash: ${tx.hash}`);
-  
-  console.log("⏳ Waiting for confirmation...");
-  await tx.wait();
-  
-  const newLevel = await oracleRegistry.floodLevels(regionId);
-  console.log(`\n✅ Flood level updated!`);
-  console.log(`Old: ${currentLevel.toString()}`);
-  console.log(`New: ${newLevel.toString()}`);
-  
-  // Check if claims are now enabled
-  const governance = await hre.ethers.getContractAt("GovernanceContract", "0x8Aa1810947707735fd75aD20F57117d05256D229");
-  const threshold = await governance.floodThreshold();
-  console.log(`\n📊 Comparison:`);
-  console.log(`Flood Level (${newLevel}) ${newLevel > threshold ? '>' : '<='} Threshold (${threshold})`);
-  console.log(`Claims ${newLevel > threshold ? 'ENABLED ✅' : 'DISABLED ❌'}`);
+  // Now update flood level to simulate critical conditions
+  console.log('Updating flood level to 3500 (above default threshold of 3000)...');
+  try {
+    const updateTx = await oracle.updateFloodLevel(1, 3500);
+    await updateTx.wait();
+    console.log('✅ Flood level updated! Transaction:', updateTx.hash);
+
+    // Verify
+    const floodLevel = await oracle.getLatestFloodLevel(1);
+    console.log('✅ Verified flood level:', floodLevel.toString());
+  } catch (error) {
+    console.error('Error updating flood level:', error);
+  }
+
+  console.log('✅ Oracle setup complete!');
+  console.log('Flood level is now set to 3500 - claims should work!');
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

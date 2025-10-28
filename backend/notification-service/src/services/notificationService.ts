@@ -152,13 +152,28 @@ export class NotificationService {
     }
   }
 
-  async getInAppNotifications(userId: string) {
+  async getInAppNotifications(userId: string, unreadOnly: boolean = false, limit: number = 20) {
     try {
-      const notifications = await db
+      let query = db
         .select()
         .from(inAppNotifications)
-        .where(eq(inAppNotifications.userId, userId));
+        .where(eq(inAppNotifications.userId, userId))
+        .orderBy(inAppNotifications.createdAt)
+        .limit(limit);
 
+      if (unreadOnly) {
+        // Drizzle's `where` can't be chained like that. We need to build the query differently.
+        // This is a simplified example. For complex queries, you might need to construct the where clause dynamically.
+        const notifications = await db
+          .select()
+          .from(inAppNotifications)
+          .where(eq(inAppNotifications.userId, userId) && eq(inAppNotifications.isRead, false))
+          .orderBy(inAppNotifications.createdAt)
+          .limit(limit);
+        return notifications;
+      }
+
+      const notifications = await query;
       return notifications;
     } catch (err) {
       logger.error(`Failed to get in-app notifications: ${err}`);
@@ -166,17 +181,17 @@ export class NotificationService {
     }
   }
 
-  async markInAppAsRead(notificationId: string): Promise<boolean> {
+  async markInAppAsRead(notificationId: string, userId: string): Promise<boolean> {
     try {
-      await db
+      const result = await db
         .update(inAppNotifications)
         .set({
           isRead: true,
           readAt: new Date(),
         })
-        .where(eq(inAppNotifications.id, notificationId));
+        .where(eq(inAppNotifications.id, notificationId) && eq(inAppNotifications.userId, userId));
 
-      return true;
+      return (result.rowCount || 0) > 0;
     } catch (err) {
       logger.error(`Failed to mark notification as read: ${err}`);
       return false;

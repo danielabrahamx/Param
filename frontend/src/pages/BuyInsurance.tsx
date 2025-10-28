@@ -1,7 +1,17 @@
-import { useState } from 'react'
-import { useWriteContract, useWaitForTransactionReceipt, useAccount, useChainId, useSwitchChain } from 'wagmi'
+import { useEffect, useMemo, useState } from 'react'
+import { parseEther, formatEther } from 'viem'
+import {
+  useWriteContract,
+  useWaitForTransactionReceipt,
+  useAccount,
+  useChainId,
+  useSwitchChain,
+  useReadContract,
+  useBalance,
+} from 'wagmi'
 import { useNavigate } from 'react-router-dom'
-import { hederaTestnet } from '../wagmi'
+import axios from 'axios'
+import { hederaTestnet, NORMALIZED_ADDRESSES } from '../wagmi'
 
 // Placeholder ABI and address
 const policyFactoryAbi = [
@@ -13,45 +23,216 @@ const policyFactoryAbi = [
     type: 'function',
   },
 ]
-const policyFactoryAddress = import.meta.env.VITE_POLICY_FACTORY_ADDRESS as `0x${string}`
+const policyFactoryAddress = NORMALIZED_ADDRESSES.POLICY_FACTORY
+
+const governanceAbi = [
+  {
+    inputs: [],
+    name: 'premiumRate',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+]
+const governanceAddress = NORMALIZED_ADDRESSES.GOVERNANCE
+
+const poolAddress = NORMALIZED_ADDRESSES.POOL
+
+// Validate contract address is loaded
+if (!policyFactoryAddress || policyFactoryAddress === '') {
+  console.error('❌ POLICY_FACTORY_ADDRESS not loaded from environment!')
+  console.error('Check that VITE_POLICY_FACTORY_ADDRESS is set in .env')
+}
+
+if (!governanceAddress || governanceAddress === '') {
+  console.error('❌ GOVERNANCE_ADDRESS not loaded from environment!')
+  console.error('Check that VITE_GOVERNANCE_ADDRESS is set in .env')
+}
+
+if (!poolAddress || poolAddress === '') {
+  console.error('❌ POOL_ADDRESS not loaded from environment!')
+  console.error('Check that VITE_POOL_ADDRESS is set in .env')
+}
 
 export default function BuyInsurance() {
   const [coverage, setCoverage] = useState('')
-  const coverageWei = coverage ? BigInt(Math.floor(parseFloat(coverage) * 10 ** 18)) : BigInt(0)
-  // Note: Premium is calculated by the contract based on governance.premiumRate()
-  // For display purposes, we show 10% but the actual rate comes from the contract
-  const premium = coverage ? (parseFloat(coverage) * 0.1).toString() : '0'
+  const coverageWei = coverage ? parseEther(coverage) : 0n
+  const {
+    data: premiumRateRaw,
+    error: premiumRateError,
+    isPending: isPremiumRatePending,
+  } = useReadContract({
+    address: governanceAddress,
+    abi: governanceAbi,
+    functionName: 'premiumRate',
+    chainId: hederaTestnet.id,
+    // Skip the call if we do not have a governance contract configured
+    query: { enabled: Boolean(governanceAddress) },
+  })
+
+  const premiumRate = useMemo(() => (premiumRateRaw ?? 0n) as bigint, [premiumRateRaw])
+  const premiumRateLabel = premiumRate > 0n ? `${premiumRate.toString()}%` : '—'
+  // Align front-end payment with on-chain premium rate to avoid underpaying and reverts
+  const premiumWei = coverage && premiumRate > 0n ? (coverageWei * premiumRate) / 100n : 0n
+  const premium = coverage ? formatEther(premiumWei) : '0'
+  const {
+    data: poolBalanceData,
+    error: poolBalanceError,
+    isPending: isPoolBalancePending,
+  } = useBalance({
+    address: poolAddress ? (poolAddress as `0x${string}`) : undefined,
+    chainId: hederaTestnet.id,
+    query: { enabled: Boolean(poolAddress) },
+  })
+  const poolBalanceWei = poolBalanceData?.value ?? 0n
+  // On Hedera EVM, balance is in wei (18 decimals) just like Ethereum
+  // Use formatEther to display it properly
+  const poolBalance = poolBalanceWei > 0n ? formatEther(poolBalanceWei) : '0'
   const { writeContract, data: hash, error: writeError } = useWriteContract()
-  const { isLoading, isSuccess } = useWaitForTransactionReceipt({ hash })
-  const { isConnected } = useAccount()
+  const { isLoading, isSuccess, data: receipt } = useWaitForTransactionReceipt({ hash })
+  const { isConnected, address } = useAccount()
   const chainId = useChainId()
   const { switchChain } = useSwitchChain()
   const navigate = useNavigate()
+  const [isSavingPolicy, setIsSavingPolicy] = useState(false)
+
+  // Log errors for debugging
+  if (writeError) {
+    console.error('❌ Transaction Error:', writeError)
+    console.error('Error details:', {
+      message: writeError.message,
+      name: writeError.name,
+      cause: writeError.cause,
+    })
+  }
+
+  useEffect(() => {
+    if (premiumRateError) {
+      console.error('❌ Failed to load premium rate from Governance contract:', premiumRateError)
+    }
+  }, [premiumRateError])
+
+  useEffect(() => {
+    if (poolBalanceError) {
+      console.error('❌ Failed to load current pool balance:', poolBalanceError)
+    }
+  }, [poolBalanceError])
+
+  // Convert coverage (18 decimals / wei) to tinybar (8 decimals) for comparison with pool balance
+  const coverageTinybar = coverageWei / 10n ** 10n
+
+  // Handle successful transaction - save policy to backend
+  useEffect(() => {
+    if (isSuccess && receipt && address && !isSavingPolicy) {
+      const savePolicyToBackend = async () => {
+        try {
+          setIsSavingPolicy(true)
+          console.log('✅ Transaction confirmed on blockchain, saving to backend...')
+          console.log('Receipt:', receipt)
+          
+          const backendUrl = import.meta.env.VITE_BACKEND_URL
+          const premiumHbar = parseFloat(premium)
+          const coverageHbar = parseFloat(coverage)
+          
+          // For now, we'll use a placeholder policy address and let the backend/indexer find it
+          // In a production system, you'd extract the address from the contract event logs
+          const placeholderPolicyAddress = '0x0000000000000000000000000000000000000000'
+          
+          // Save policy to backend - it will search blockchain for the actual address
+          await axios.post(`${backendUrl}/api/v1/policies`, {
+            coverage: coverageHbar,
+            premium: premiumHbar,
+            policyholder: address,
+            policyAddress: placeholderPolicyAddress, // Backend will index this from blockchain
+          })
+          
+          console.log('✅ Policy saved to backend successfully!')
+          
+          // Show success message and redirect
+          alert(`✅ Insurance policy purchased!\n\nCoverage: ${coverageHbar} HBAR\nPremium: ${premiumHbar} HBAR\n\nYour policy will appear on the dashboard shortly.`)
+          
+          // Redirect to dashboard
+          navigate('/dashboard')
+        } catch (error: any) {
+          console.error('❌ Error saving policy to backend:', error)
+          alert(`⚠️ Blockchain transaction succeeded but failed to save to database.\n\nThis is a display issue. Please refresh or contact support.\n\nTransaction Hash: ${hash}`)
+          
+          // Still navigate to dashboard so user can see the transaction
+          setTimeout(() => navigate('/dashboard'), 2000)
+        } finally {
+          setIsSavingPolicy(false)
+        }
+      }
+      
+      savePolicyToBackend()
+    }
+  }, [isSuccess, receipt, address, isSavingPolicy, coverage, premium, hash, navigate])
 
   const handleBuy = () => {
-    if (!coverage || !isConnected) return
+    if (!coverage || !isConnected) {
+      console.warn('Cannot buy insurance:', { coverage, isConnected })
+      return
+    }
+
+    if (!policyFactoryAddress) {
+      console.error('Policy factory address missing; aborting purchase')
+      return
+    }
+
+    if (!governanceAddress) {
+      console.error('Governance address missing; aborting purchase')
+      return
+    }
+
+    if (premiumRate === 0n) {
+      console.error('Premium rate unavailable; aborting purchase')
+      return
+    }
     
+    if (poolBalanceWei < coverageTinybar) {
+      console.warn('Pool liquidity insufficient for requested coverage', {
+        requestedCoverage: coverageTinybar.toString(),
+        availableLiquidity: poolBalanceWei.toString(),
+      })
+      return
+    }
+
     // Force switch to Hedera Testnet if not already on it
     if (chainId !== hederaTestnet.id) {
+      console.log('Switching to Hedera Testnet...')
       switchChain({ chainId: hederaTestnet.id })
       return
     }
+    
+    console.log('Initiating createPolicy transaction:', {
+      address: policyFactoryAddress,
+      coverage,
+      coverageWei: coverageWei.toString(),
+      premium,
+      premiumWei: premiumWei.toString(),
+      chainId: hederaTestnet.id,
+    })
     
     writeContract({
       address: policyFactoryAddress,
       abi: policyFactoryAbi,
       functionName: 'createPolicy',
       args: [coverageWei],
-      // DO NOT send value - the contract is not payable
+      value: premiumWei, // Send premium in wei - contract will convert to tinybar if needed
       chainId: hederaTestnet.id,
+      gas: 1_000_000n, // Explicit gas limit for Hedera
     })
   }
 
-  if (isSuccess) {
-    navigate('/dashboard')
-  }
-
   const isWrongNetwork = chainId !== hederaTestnet.id
+  const isBuyDisabled =
+    !coverage ||
+    parseFloat(coverage) < 0.1 ||
+    isLoading ||
+    isPremiumRatePending ||
+    premiumRate === 0n ||
+    isPoolBalancePending ||
+    poolBalanceWei < coverageTinybar
 
   if (!isConnected) {
     return (
@@ -133,8 +314,31 @@ export default function BuyInsurance() {
               <span className="font-bold text-gray-900">{coverage || '0'} HBAR</span>
             </div>
             <div className="border-t border-gray-300 pt-2 flex justify-between items-center">
-              <span className="text-gray-700 font-semibold">Premium (10%):</span>
+              <span className="text-gray-700 font-semibold">Premium ({premiumRateLabel}):</span>
               <span className="font-bold text-lg text-blue-600">{premium} HBAR</span>
+            </div>
+            {premiumRateError && (
+              <p className="text-xs text-red-600 mt-2">Could not load premium rate. Please retry.</p>
+            )}
+            {isPremiumRatePending && !premiumRateError && (
+              <p className="text-xs text-gray-500 mt-2">Fetching current premium rate...</p>
+            )}
+            <div className="border-t border-dashed border-gray-300 mt-3 pt-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-700 text-sm font-medium">Available Pool Liquidity:</span>
+                <span className="text-sm font-semibold text-gray-900">{poolBalance} HBAR</span>
+              </div>
+              {poolBalanceError && (
+                <p className="text-xs text-red-600 mt-2">Unable to fetch pool liquidity. Please retry later.</p>
+              )}
+              {isPoolBalancePending && !poolBalanceError && (
+                <p className="text-xs text-gray-500 mt-2">Checking pool liquidity...</p>
+              )}
+              {coverage && poolBalanceWei < coverageTinybar && !isPoolBalancePending && !poolBalanceError && (
+                <p className="text-xs text-red-600 mt-2">
+                  Pool liquidity is below the requested coverage. Please lower coverage or ask the admin to top up the pool.
+                </p>
+              )}
             </div>
           </div>
 
@@ -169,7 +373,7 @@ export default function BuyInsurance() {
           {/* Buy Button */}
           <button
             onClick={handleBuy}
-            disabled={!coverage || isLoading || parseFloat(coverage) < 0.1}
+            disabled={isBuyDisabled}
             className="w-full py-4 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-400 text-white font-bold rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:scale-100"
           >
             {isLoading ? (
@@ -195,9 +399,24 @@ export default function BuyInsurance() {
 
           {writeError && (
             <div className="mt-4 p-3 bg-red-50 border border-red-300 rounded-lg">
-              <p className="text-sm text-red-800">
-                <span className="font-semibold">Error:</span> {writeError.message || 'Transaction failed'}
+              <p className="text-sm text-red-800 font-semibold mb-1">Transaction Error:</p>
+              <p className="text-xs text-red-700">
+                {writeError.message?.includes('RPC endpoint') || writeError.message?.includes('HTTP client error')
+                  ? 'Network connection issue with Hedera. Please try again in a moment.'
+                  : writeError.message?.includes('user rejected')
+                  ? 'Transaction was rejected in your wallet.'
+                  : writeError.message?.includes('insufficient')
+                  ? 'Insufficient funds. Please check your wallet balance.'
+                  : writeError.message || 'Transaction failed. Please try again.'}
               </p>
+              {(writeError.message?.includes('RPC') || writeError.message?.includes('HTTP')) && (
+                <button
+                  onClick={handleBuy}
+                  className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline"
+                >
+                  Retry Transaction
+                </button>
+              )}
             </div>
           )}
         </div>

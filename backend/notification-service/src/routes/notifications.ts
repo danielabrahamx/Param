@@ -43,7 +43,7 @@ router.post('/send', async (req, res) => {
     logger.error(`Failed to send notification: ${error}`);
     res.status(400).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Invalid request',
+      error: error instanceof z.ZodError ? error.errors : 'Invalid request',
     });
   }
 });
@@ -64,7 +64,7 @@ router.post('/trigger', async (req, res) => {
     logger.error(`Failed to trigger notifications: ${error}`);
     res.status(400).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Invalid request',
+      error: error instanceof z.ZodError ? error.errors : 'Invalid request',
     });
   }
 });
@@ -99,8 +99,13 @@ router.get('/logs/:userId', async (req, res) => {
 router.get('/in-app/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    const { unreadOnly = false, limit = 20 } = req.query;
 
-    const notifications = await notificationService.getInAppNotifications(userId);
+    const notifications = await notificationService.getInAppNotifications(
+      userId,
+      Boolean(unreadOnly),
+      parseInt(String(limit))
+    );
 
     res.status(200).json({
       success: true,
@@ -120,13 +125,19 @@ router.get('/in-app/:userId', async (req, res) => {
 router.put('/in-app/:id/read', async (req, res) => {
   try {
     const { id } = req.params;
+    const { userId } = req.body; // require userId for authorization
 
-    const success = await notificationService.markInAppAsRead(id);
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'User ID is required' });
+    }
 
-    res.status(200).json({
-      success,
-      message: success ? 'Notification marked as read' : 'Failed to mark as read',
-    });
+    const success = await notificationService.markInAppAsRead(id, userId);
+
+    if (success) {
+      res.status(200).json({ success: true });
+    } else {
+      res.status(404).json({ success: false, error: 'Notification not found or not authorized' });
+    }
   } catch (error) {
     logger.error(`Failed to mark notification as read: ${error}`);
     res.status(500).json({

@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  const policyAddress = "0x4a6a659A60A03e66b1d8e1B57a9baa0CB19d6D3a"; // Replace with your policy address
+  const policyAddress = "0x8FB69719Ba39E451cA8E0c04B4C5476eE23122a2"; // From database
   const oracleAddress = "0x010AD086bbfb482cd9c48F71221e702d924bCE70";
   const governanceAddress = "0x8Aa1810947707735fd75aD20F57117d05256D229";
 

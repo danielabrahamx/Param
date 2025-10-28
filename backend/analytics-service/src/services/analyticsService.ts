@@ -106,13 +106,13 @@ export class AnalyticsService {
 
       return metrics;
     } catch (err) {
-      logger.error(`Failed to get dashboard metrics: ${err}`);
+      logger.error({ err }, `Failed to get dashboard metrics`);
       throw err;
     }
   }
 
   async getPolicyMetrics(limit_val: number = 30): Promise<any[]> {
-    const cacheKey = 'policy_metrics_30days';
+    const cacheKey = `policy_metrics_${limit_val}days`;
 
     const cachedData = await cacheService.get<any[]>(cacheKey);
     if (cachedData) {
@@ -129,13 +129,13 @@ export class AnalyticsService {
       await cacheService.set(cacheKey, data, 600);
       return data;
     } catch (err) {
-      logger.error(`Failed to get policy metrics: ${err}`);
+      logger.error({ err }, `Failed to get policy metrics`);
       throw err;
     }
   }
 
   async getClaimMetrics(limit_val: number = 30): Promise<any[]> {
-    const cacheKey = 'claim_metrics_30days';
+    const cacheKey = `claim_metrics_${limit_val}days`;
 
     const cachedData = await cacheService.get<any[]>(cacheKey);
     if (cachedData) {
@@ -152,13 +152,13 @@ export class AnalyticsService {
       await cacheService.set(cacheKey, data, 600);
       return data;
     } catch (err) {
-      logger.error(`Failed to get claim metrics: ${err}`);
+      logger.error({ err }, `Failed to get claim metrics`);
       throw err;
     }
   }
 
   async getPoolMetrics(limit_val: number = 30): Promise<any[]> {
-    const cacheKey = 'pool_metrics_30days';
+    const cacheKey = `pool_metrics_${limit_val}days`;
 
     const cachedData = await cacheService.get<any[]>(cacheKey);
     if (cachedData) {
@@ -175,13 +175,13 @@ export class AnalyticsService {
       await cacheService.set(cacheKey, data, 600);
       return data;
     } catch (err) {
-      logger.error(`Failed to get pool metrics: ${err}`);
+      logger.error({ err }, `Failed to get pool metrics`);
       throw err;
     }
   }
 
   async getRevenueMetrics(limit_val: number = 30): Promise<any[]> {
-    const cacheKey = 'revenue_metrics_30days';
+    const cacheKey = `revenue_metrics_${limit_val}days`;
 
     const cachedData = await cacheService.get<any[]>(cacheKey);
     if (cachedData) {
@@ -198,7 +198,7 @@ export class AnalyticsService {
       await cacheService.set(cacheKey, data, 600);
       return data;
     } catch (err) {
-      logger.error(`Failed to get revenue metrics: ${err}`);
+      logger.error({ err }, `Failed to get revenue metrics`);
       throw err;
     }
   }

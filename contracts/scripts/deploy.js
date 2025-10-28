@@ -28,6 +28,10 @@ async function main() {
   const factory = await PolicyFactory.deploy(await oracle.getAddress(), await governance.getAddress(), await pool.getAddress());
   await factory.waitForDeployment();
   console.log('PolicyFactory deployed to:', await factory.getAddress());
+  
+  // Set factory address on pool
+  await pool.setPolicyFactory(await factory.getAddress());
+  console.log('PolicyFactory address set on InsurancePool');
 
   console.log('Deployment complete!');
 }

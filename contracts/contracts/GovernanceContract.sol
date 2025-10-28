@@ -9,8 +9,8 @@ contract GovernanceContract is AccessControl, Pausable {
     bytes32 public constant ORACLE_UPDATER_ROLE = keccak256("ORACLE_UPDATER_ROLE");
     bytes32 public constant POLICY_CREATOR_ROLE = keccak256("POLICY_CREATOR_ROLE");
 
-    uint256 public floodThreshold = 3000; // Default flood threshold
-    uint256 public premiumRate = 10; // Default premium rate (10%)
+    uint256 private _floodThreshold = 1500; // Default flood threshold (15.0 feet)
+    uint256 private _premiumRate = 10; // Default premium rate (10%)
 
     event ParameterUpdated(string parameter, uint256 value);
     event ContractPaused(address indexed by);
@@ -24,12 +24,12 @@ contract GovernanceContract is AccessControl, Pausable {
     }
 
     function updateFloodThreshold(uint256 newThreshold) external onlyRole(ADMIN_ROLE) {
-        floodThreshold = newThreshold;
+        _floodThreshold = newThreshold;
         emit ParameterUpdated("floodThreshold", newThreshold);
     }
 
     function updatePremiumRate(uint256 newRate) external onlyRole(ADMIN_ROLE) {
-        premiumRate = newRate;
+        _premiumRate = newRate;
         emit ParameterUpdated("premiumRate", newRate);
     }
 
@@ -49,5 +49,13 @@ contract GovernanceContract is AccessControl, Pausable {
 
     function revokeRole(bytes32 role, address account) public override onlyRole(getRoleAdmin(role)) {
         super.revokeRole(role, account);
+    }
+
+    function premiumRate() external view returns (uint256) {
+        return _premiumRate;
+    }
+
+    function floodThreshold() external view returns (uint256) {
+        return _floodThreshold;
     }
 }

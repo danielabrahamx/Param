@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import { db } from './db';
-import { policies, claimsPool } from './db/schema';
+import { policies, syncState } from './db/schema';
 import { eq } from 'drizzle-orm';
 import dotenv from 'dotenv';
 
@@ -9,91 +9,120 @@ dotenv.config();
 async function syncPolicies() {
   console.log('🔄 Syncing policies from Hedera blockchain...\n');
 
-  const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
-  
-  const factoryAbi = [
-    "event PolicyCreated(address indexed policyAddress, uint256 coverage, uint256 premium, address indexed policyholder)"
+  const rpcUrl = process.env.RPC_URL || 'https://testnet.hashio.io/api';
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const policyFactoryAddress = process.env.POLICY_FACTORY_ADDRESS;
+
+  if (!policyFactoryAddress) {
+    console.error('❌ POLICY_FACTORY_ADDRESS not set in environment');
+    throw new Error('POLICY_FACTORY_ADDRESS required');
+  }
+
+  // PolicyFactory ABI - just need the PolicyCreated event
+  const policyFactoryAbi = [
+    'event PolicyCreated(address indexed policyAddress, uint256 coverage, uint256 premium, address indexed policyholder)',
   ];
-  
-  const factory = new ethers.Contract(
-    process.env.POLICY_FACTORY_ADDRESS!,
-    factoryAbi,
-    provider
-  );
 
   try {
-    // Get all PolicyCreated events (limit to recent blocks on Hedera)
-    const currentBlock = await provider.getBlockNumber();
-    const fromBlock = Math.max(0, currentBlock - 50000); // Last ~50k blocks
-    
-    const filter = factory.filters.PolicyCreated();
-    const events = await factory.queryFilter(filter, fromBlock, currentBlock);
+    const contract = new ethers.Contract(policyFactoryAddress, policyFactoryAbi, provider);
 
-    console.log(`Found ${events.length} policy events on-chain\n`);
+    // Get current block number
+    const currentBlock = await provider.getBlockNumber();
+    
+    // Get the last synced block from the database
+    let lastSyncRecord = await db
+      .select()
+      .from(syncState)
+      .where(eq(syncState.service, 'policy-sync'))
+      .limit(1);
+    
+    let lastSyncedBlock = 0;
+    if (lastSyncRecord.length > 0) {
+      lastSyncedBlock = lastSyncRecord[0].lastSyncedBlock;
+    }
+    
+    // Hedera RPC limits queries to 7 days of history
+    // Approximately 26 blocks per minute * 60 * 24 * 7 = ~261,120 blocks per 7 days
+    const SEVEN_DAYS_IN_BLOCKS = 261120;
+    const minBlock = Math.max(0, currentBlock - SEVEN_DAYS_IN_BLOCKS);
+    
+    // Start from the block after the last synced block, but not before the 7-day limit
+    const fromBlock = Math.max(minBlock, lastSyncedBlock + 1);
+    
+    console.log(`Last synced block: ${lastSyncedBlock}`);
+    console.log(`Searching for PolicyCreated events from block ${fromBlock} to ${currentBlock}...`);
+
+    // Query events
+    const events = await contract.queryFilter('PolicyCreated', fromBlock, currentBlock);
+    
+    console.log(`Found ${events.length} PolicyCreated events`);
 
     for (const event of events) {
-      if (!('args' in event)) continue;
-      
-      const { policyAddress, coverage, premium, policyholder } = event.args;
+      // Type assertion for EventLog which has args
+      const eventLog = event as ethers.EventLog;
+      const policyAddress = eventLog.args?.[0] as string;
+      const coverage = eventLog.args?.[1] as bigint;
+      const premium = eventLog.args?.[2] as bigint;
+      const policyholder = eventLog.args?.[3] as string;
 
-      // Check if already in database
-      const existing = await db.select().from(policies).where(
-        eq(policies.policyAddress, policyAddress)
-      );
-
-      if (existing.length === 0) {
-        // Convert from Wei to HBAR (divide by 10^18)
-        const coverageHbar = Number(ethers.formatEther(coverage));
-        const premiumHbar = Number(ethers.formatEther(premium));
-        
-        // Store as integer: multiply by 10 to preserve one decimal place
-        // 0.1 HBAR -> 1, 1 HBAR -> 10, etc.
-        await db.insert(policies).values({
-          policyAddress,
-          coverage: Math.round(coverageHbar * 10),
-          premium: Math.round(premiumHbar * 10),
-          policyholder,
-        });
-        
-        // Add premium to claims pool (unified pool)
-        const premiumAmount = Math.round(premiumHbar * 10);
-        const pool = await db.select().from(claimsPool).limit(1);
-        
-        if (pool.length > 0) {
-          const currentCapacity = BigInt(pool[0].totalCapacity.toString());
-          const currentBalance = BigInt(pool[0].availableBalance.toString());
-          const newCapacity = currentCapacity + BigInt(premiumAmount);
-          const newBalance = currentBalance + BigInt(premiumAmount);
-          
-          await db.update(claimsPool)
-            .set({
-              totalCapacity: newCapacity.toString(),
-              availableBalance: newBalance.toString(),
-              updatedAt: new Date(),
-            })
-            .where(eq(claimsPool.id, pool[0].id));
-          
-          console.log(`💰 Added premium to pool: ${premiumHbar} HBAR`);
-        } else {
-          // Initialize pool if it doesn't exist
-          await db.insert(claimsPool).values({
-            totalCapacity: premiumAmount.toString(),
-            availableBalance: premiumAmount.toString(),
-            totalClaimsProcessed: '0',
-          });
-          console.log(`🆕 Initialized pool with premium: ${premiumHbar} HBAR`);
-        }
-        
-        console.log(`✅ Synced policy: ${policyAddress}`);
-        console.log(`   Coverage: ${coverageHbar} HBAR (stored as ${Math.round(coverageHbar * 10)})`);
-        console.log(`   Premium: ${premiumHbar} HBAR (stored as ${Math.round(premiumHbar * 10)})`);
-        console.log(`   Holder: ${policyholder}\n`);
-      } else {
-        console.log(`⏭️  Skipped (already in DB): ${policyAddress}\n`);
+      if (!policyAddress || !policyholder) {
+        console.warn('⚠️ Skipping invalid event:', eventLog.args);
+        continue;
       }
+
+      // Check if policy already exists in database
+      const existingPolicy = await db
+        .select()
+        .from(policies)
+        .where(eq(policies.policyAddress, policyAddress))
+        .limit(1);
+
+      if (existingPolicy.length > 0) {
+        console.log(`Policy ${policyAddress} already in database, skipping...`);
+        continue;
+      }
+
+      // Convert wei values (18 decimals) to whole HBAR units
+      const coverageHbar = Number(coverage) / 1e18;
+      const premiumHbar = Number(premium) / 1e18;
+
+      console.log(`📝 Adding policy: ${policyAddress}`);
+      console.log(`   Coverage: ${coverageHbar} HBAR, Premium: ${premiumHbar} HBAR`);
+      console.log(`   Policyholder: ${policyholder}`);
+
+      await db.insert(policies).values({
+        policyAddress,
+        coverage: coverageHbar.toString(),
+        premium: premiumHbar.toString(),
+        policyholder: policyholder.toLowerCase(),
+      });
+
+      console.log(`✅ Policy ${policyAddress} added to database`);
     }
 
-    console.log('✅ Sync complete!');
+    // Update the last synced block in the database
+    if (currentBlock > lastSyncedBlock) {
+      if (lastSyncRecord.length > 0) {
+        // Update existing record
+        await db
+          .update(syncState)
+          .set({
+            lastSyncedBlock: currentBlock,
+            lastSyncTime: new Date(),
+          })
+          .where(eq(syncState.service, 'policy-sync'));
+      } else {
+        // Create new record
+        await db.insert(syncState).values({
+          service: 'policy-sync',
+          lastSyncedBlock: currentBlock,
+          lastSyncTime: new Date(),
+        });
+      }
+      console.log(`✅ Updated last synced block to ${currentBlock}`);
+    }
+
+    console.log('\n✅ Sync complete!');
   } catch (error) {
     console.error('❌ Sync failed:', error);
     throw error;

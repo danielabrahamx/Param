@@ -44,7 +44,8 @@ export default function Analytics() {
         axios.get(`${backendUrl}/api/v1/oracle/flood-level/1`),
       ])
 
-      const policies = policiesRes.data
+      // Handle policies response - check if it has success/data wrapper
+      const policies = policiesRes.data.success ? policiesRes.data.data : policiesRes.data;
       const activePolicies = policies.filter((p: any) => !p.payoutTriggered)
       const claimsPaid = policies.filter((p: any) => p.payoutTriggered).length
       

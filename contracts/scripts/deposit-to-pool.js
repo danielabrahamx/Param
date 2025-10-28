@@ -2,7 +2,7 @@ const hre = require("hardhat");
 const { ethers } = require("ethers");
 
 async function main() {
-  const poolAddress = "0xA64B631F05E12f6010D5010bC28E0F18C5895b26";
+  const poolAddress = process.env.POOL_ADDRESS || "0xd6ec409DAbaB38E6c8f12816873239024c732363";
   const rpcUrl = process.env.RPC_URL || "https://testnet.hashio.io/api";
   const privateKey = process.env.PRIVATE_KEY;
   
@@ -15,8 +15,8 @@ async function main() {
   
   const poolAbi = [
     "function deposit() payable",
-    "function totalLiquidity() view returns (uint256)",
-    "function totalReserves() view returns (uint256)"
+    "function getBalance() view returns (uint256)",
+    "function totalBalance() view returns (uint256)"
   ];
   
   const pool = new ethers.Contract(poolAddress, poolAbi, wallet);
@@ -28,11 +28,11 @@ async function main() {
   const balanceBefore = await provider.getBalance(wallet.address);
   console.log("\nWallet balance before:", ethers.formatEther(balanceBefore), "HBAR");
   
-  const liquidityBefore = await pool.totalLiquidity();
-  console.log("Pool liquidity before:", ethers.formatEther(liquidityBefore), "HBAR");
+  const poolBalanceBefore = await pool.getBalance();
+  console.log("Pool balance before:", ethers.formatEther(poolBalanceBefore), "HBAR");
   
-  // Deposit 1 HBAR
-  const depositAmount = ethers.parseEther("1.0");
+  // Deposit 40 HBAR
+  const depositAmount = ethers.parseEther("5.0");
   console.log("\nDepositing:", ethers.formatEther(depositAmount), "HBAR");
   
   const tx = await pool.deposit({ value: depositAmount });
@@ -43,12 +43,12 @@ async function main() {
   console.log("Transaction confirmed in block:", receipt.blockNumber);
   
   // Check balance after
-  const liquidityAfter = await pool.totalLiquidity();
+  const poolBalanceAfter = await pool.getBalance();
   const balanceAfter = await provider.getBalance(wallet.address);
   
   console.log("\nWallet balance after:", ethers.formatEther(balanceAfter), "HBAR");
-  console.log("Pool liquidity after:", ethers.formatEther(liquidityAfter), "HBAR");
-  console.log("\nSuccess! Deposited:", ethers.formatEther(liquidityAfter - liquidityBefore), "HBAR");
+  console.log("Pool balance after:", ethers.formatEther(poolBalanceAfter), "HBAR");
+  console.log("\n✅ Success! Deposited:", ethers.formatEther(poolBalanceAfter - poolBalanceBefore), "HBAR");
 }
 
 main()

@@ -3,8 +3,8 @@ import { pgTable, serial, varchar, integer, timestamp, boolean, decimal, text } 
 export const policies = pgTable('policies', {
   id: serial('id').primaryKey(),
   policyAddress: varchar('policy_address', { length: 42 }).notNull(),
-  coverage: integer('coverage').notNull(),
-  premium: integer('premium').notNull(),
+  coverage: decimal('coverage', { precision: 18, scale: 1 }).notNull(),
+  premium: decimal('premium', { precision: 18, scale: 2 }).notNull(),
   policyholder: varchar('policyholder', { length: 42 }).notNull(),
   payoutTriggered: boolean('payout_triggered').default(false),
   createdAt: timestamp('created_at').defaultNow(),
@@ -47,5 +47,13 @@ export const claimsPool = pgTable('claims_pool', {
   totalCapacity: decimal('total_capacity', { precision: 18, scale: 0 }).notNull().default('0'), // Total capital available for claims
   availableBalance: decimal('available_balance', { precision: 18, scale: 0 }).notNull().default('0'), // Available after claims
   totalClaimsProcessed: decimal('total_claims_processed', { precision: 18, scale: 0 }).notNull().default('0'),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const syncState = pgTable('sync_state', {
+  id: serial('id').primaryKey(),
+  service: varchar('service', { length: 100 }).notNull().unique(), // e.g., 'policy-sync', 'claim-sync'
+  lastSyncedBlock: integer('last_synced_block').notNull().default(0),
+  lastSyncTime: timestamp('last_sync_time').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

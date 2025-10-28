@@ -82,14 +82,27 @@ export async function monitorOracle() {
 
         for (const policy of eligiblePolicies) {
           try {
-            // Calculate payout amount (e.g., coverage amount)
-            const payoutAmount = ethers.parseEther(policy.coverage.toString());
+            // Create policy contract instance for this specific policy
+            const policyContract = new ethers.Contract(policy.policyAddress, [
+              "function triggerPayout() external"
+            ], signer);
 
-            // Trigger payout via pool contract
-            const tx = await poolContract.payOut(policy.policyholder, payoutAmount);
+            // Check if policy contract has enough balance for payout
+            const payoutAmount = ethers.parseEther(policy.coverage.toString());
+            const contractBalance = await provider!.getBalance(policy.policyAddress);
+
+            if (contractBalance < payoutAmount) {
+              console.log(`Policy ${policy.id} has insufficient balance (${ethers.formatEther(contractBalance)} HBAR) for payout (${ethers.formatEther(payoutAmount)} HBAR)`);
+              continue;
+            }
+
+            // Trigger payout via policy contract (direct transfer)
+            const tx = await policyContract.triggerPayout();
             const receipt = await tx.wait();
 
-            console.log(`Payout triggered for policy ${policy.id}, tx: ${receipt?.hash}`);
+            console.log(`✅ Payout successful for policy ${policy.id}, tx: ${receipt?.hash}`);
+            console.log(`   Amount: ${ethers.formatEther(payoutAmount)} HBAR`);
+            console.log(`   To: ${policy.policyholder}`);
 
             // Insert claim
             const claimResult = await db.insert(claims).values({
@@ -109,7 +122,7 @@ export async function monitorOracle() {
             // Mark policy as triggered
             await db.update(policies).set({ payoutTriggered: true }).where(eq(policies.id, policy.id));
           } catch (policyError) {
-            console.error(`Error processing policy ${policy.id}:`, policyError);
+            console.error(`❌ Error processing policy ${policy.id}:`, policyError instanceof Error ? policyError.message : String(policyError));
           }
         }
       }

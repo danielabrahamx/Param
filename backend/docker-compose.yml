@@ -28,6 +28,11 @@ services:
       - PRIVATE_KEY=${PRIVATE_KEY}
       - POLICY_FACTORY_ADDRESS=${POLICY_FACTORY_ADDRESS}
       - POOL_ADDRESS=${POOL_ADDRESS}
+      - OPERATOR_ID=${OPERATOR_ID}
+      - OPERATOR_KEY=${OPERATOR_KEY}
+      - ORACLE_REGISTRY_ADDRESS=${ORACLE_REGISTRY_ADDRESS}
+      - GOVERNANCE_ADDRESS=${GOVERNANCE_ADDRESS}
+      - REGIONS=${REGIONS}
     depends_on:
       - postgres
 
@@ -61,27 +66,6 @@ services:
     depends_on:
       - postgres
 
-  notification-service:
-    build: ./notification-service
-    ports:
-      - "3004:3004"
-    environment:
-      - DATABASE_URL=postgres://user:password@postgres:5432/param
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - PORT=3004
-      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
-      - SENDGRID_FROM_EMAIL=${SENDGRID_FROM_EMAIL}
-      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
-      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
-      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
-      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
-      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
-      - VAPID_SUBJECT=${VAPID_SUBJECT}
-    depends_on:
-      - postgres
-      - redis
-
   analytics-service:
     build: ./analytics-service
     ports:
@@ -103,7 +87,6 @@ services:
       - policy-service
       - oracle-service
       - claims-service
-      - notification-service
       - analytics-service
 
 volumes:

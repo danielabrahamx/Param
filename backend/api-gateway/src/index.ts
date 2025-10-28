@@ -36,9 +36,6 @@ app.use('/api/v1/claims', createProxyMiddleware({
   logLevel: 'debug'
 }));
 
-// Proxy to notification-service
-app.use('/api/v1/notifications', createProxyMiddleware({ target: 'http://notification-service:3004', changeOrigin: true }));
-
 // Proxy to analytics-service
 app.use('/api/v1/analytics', createProxyMiddleware({ target: 'http://analytics-service:3005', changeOrigin: true }));
 

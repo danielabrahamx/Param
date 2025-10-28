@@ -3,8 +3,8 @@ import { pgTable, serial, text, integer, timestamp, boolean, decimal, varchar } 
 export const policies = pgTable('policies', {
   id: serial('id').primaryKey(),
   policyAddress: varchar('policy_address', { length: 42 }).notNull(),
-  coverage: integer('coverage').notNull(),
-  premium: integer('premium').notNull(),
+  coverage: decimal('coverage', { precision: 18, scale: 1 }).notNull(),
+  premium: decimal('premium', { precision: 18, scale: 2 }).notNull(),
   policyholder: varchar('policyholder', { length: 42 }).notNull(),
   payoutTriggered: boolean('payout_triggered').default(false),
   createdAt: timestamp('created_at').defaultNow(),

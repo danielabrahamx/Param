@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { NORMALIZED_ADDRESSES } from '../wagmi'
 
 interface Policy {
   id: number
@@ -28,6 +29,10 @@ interface FloodData {
 export default function Dashboard() {
   const { address, isConnected } = useAccount()
   const navigate = useNavigate()
+
+  // Admin wallet address
+  const ADMIN_ADDRESS = '0xa3f3599f3B375F95125c4d9402140c075F733D8e'
+  const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase()
   const [policies, setPolicies] = useState<Policy[]>([])
   const [floodData, setFloodData] = useState<FloodData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -81,15 +86,14 @@ export default function Dashboard() {
   ]
 
   // Fetch flood threshold from governance contract
-  const governanceAddress = import.meta.env.VITE_GOVERNANCE_ADDRESS as `0x${string}`
   const { data: contractThreshold } = useReadContract({
-    address: governanceAddress,
+    address: NORMALIZED_ADDRESSES.GOVERNANCE,
     abi: governanceAbi,
     functionName: 'floodThreshold',
   })
 
   // Use contract threshold if available, otherwise use frontend threshold
-  const effectiveThreshold = contractThreshold ? Number(contractThreshold) : criticalThreshold
+  const effectiveThreshold = contractThreshold ? Number(contractThreshold as bigint) : criticalThreshold
 
   // Persist thresholds to localStorage whenever they change
   useEffect(() => {
@@ -119,7 +123,15 @@ export default function Dashboard() {
         axios.get(`${backendUrl}/api/v1/oracle/flood-level/1`),
         axios.get(`${backendUrl}/api/v1/claims/pool/status`),
       ])
-      setPolicies(policiesRes.data)
+
+      // Handle policies response - check if it has success/data wrapper
+      const allPolicies = policiesRes.data.success ? policiesRes.data.data : policiesRes.data;
+      
+      // Filter policies to only show those belonging to the connected wallet
+      const userPolicies = allPolicies.filter((policy: Policy) =>
+        policy.policyholder.toLowerCase() === address?.toLowerCase()
+      )
+      setPolicies(userPolicies)
       setFloodData(floodRes.data)
       setClaimsPoolStatus(poolRes.data)
     } catch (error) {
@@ -132,13 +144,20 @@ export default function Dashboard() {
   const handleClaimPayout = async (policy: Policy) => {
     // Check if already claimed
     if (policy.payoutTriggered) {
+      console.warn('Policy already claimed:', policy.id)
       alert('⚠️ This policy has already been claimed!')
       return
     }
 
     try {
       setClaimingPolicyId(policy.id)
-      console.log('Triggering blockchain payout for policy:', policy);
+      console.log('🔔 Triggering blockchain payout for policy:', {
+        policyId: policy.id,
+        policyAddress: policy.policyAddress,
+        coverage: policy.coverage,
+        floodLevel,
+        effectiveThreshold,
+      })
       
       // Call triggerPayout() on the policy contract via MetaMask
       writeContract({
@@ -147,10 +166,11 @@ export default function Dashboard() {
         functionName: 'triggerPayout',
       })
       
+      console.log('Transaction initiated, waiting for confirmation...')
       // The transaction will be handled by the useWaitForTransactionReceipt hook
       // which will update isClaimSuccess when confirmed
     } catch (error: any) {
-      console.error('Error initiating claim transaction:', error);
+      console.error('❌ Error initiating claim transaction:', error);
       alert(`❌ Failed to initiate claim: ${error.message || 'Unknown error'}`)
       setClaimingPolicyId(null)
     }
@@ -159,13 +179,23 @@ export default function Dashboard() {
   // Watch for successful claim transaction
   useEffect(() => {
     if (isClaimSuccess && claimingPolicyId) {
-      console.log('Claim transaction confirmed:', claimTxHash);
+      console.log('✅ Claim transaction confirmed on blockchain:', claimTxHash);
       
       // Record the claim in the backend after blockchain confirmation
-      const recordClaim = async () => {
+      const recordClaim = async (retryCount = 0) => {
         try {
           const policy = policies.find(p => p.id === claimingPolicyId)
-          if (!policy) return
+          if (!policy) {
+            console.error('Policy not found for claim recording:', claimingPolicyId)
+            return
+          }
+          
+          console.log('Recording claim in backend:', {
+            policyId: policy.id,
+            policyholder: policy.policyholder,
+            amount: policy.coverage,
+            attempt: retryCount + 1,
+          })
           
           const response = await axios.post(`${backendUrl}/api/v1/claims/create`, {
             policyId: policy.id,
@@ -173,15 +203,50 @@ export default function Dashboard() {
             amount: policy.coverage,
           })
           
-          console.log('Claim recorded in backend:', response.data);
-          alert(`✅ Claim successful!\n\nTransaction Hash: ${claimTxHash}\nClaim ID: ${response.data.id}\n\nPayou has been sent to your wallet!`)
+          console.log('✅ Claim recorded in backend:', response.data);
+          alert(`✅ Claim successful!\n\nTransaction Hash: ${String(claimTxHash)}\nClaim ID: ${String(response.data.id)}\n\nPayout has been sent to your wallet!`)
           
           setSelectedPolicy(null)
           setClaimingPolicyId(null)
           fetchData() // Refresh to show updated status
         } catch (error: any) {
-          console.error('Error recording claim in backend:', error);
-          alert(`⚠️ Blockchain transaction succeeded but failed to record claim in database.\nTransaction: ${claimTxHash}`)
+          const errorData = error.response?.data || {};
+          const errorMessage = errorData.message || error.message || 'Unknown error';
+          const requestId = errorData.requestId || 'unknown';
+          
+          console.error('❌ Error recording claim in backend:', {
+            status: error.response?.status,
+            data: errorData,
+            message: errorMessage,
+            retryCount,
+          });
+
+          // Check if this is a retryable error (transient database issue)
+          const isRetryable = 
+            error.response?.status === 500 && 
+            retryCount < 2 &&
+            (errorMessage.includes('connection') || 
+             errorMessage.includes('timeout') ||
+             errorMessage.includes('persistence'));
+
+          if (isRetryable) {
+            console.log(`⏳ Transient error detected, retrying in 2 seconds (attempt ${retryCount + 2}/3)...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return recordClaim(retryCount + 1);
+          }
+
+          // Handle different error scenarios
+          if (error.response?.status === 400) {
+            // Business logic error (already claimed, etc.)
+            alert(`❌ ${errorData.error || errorMessage}\n\n${errorData.hint || ''}\n\nTransaction Hash: ${claimTxHash}`);
+          } else if (error.response?.status === 402) {
+            // Insufficient funds
+            alert(`❌ Insufficient funds in claims pool\n\nRequested: ${errorData.requested}\nAvailable: ${errorData.available}\n\nTransaction Hash: ${claimTxHash}\n\nPlease contact support.`);
+          } else {
+            // Generic persistence or server error
+            alert(`⚠️ Blockchain transaction succeeded but database operation failed.\n\nTransaction Hash: ${claimTxHash}\nRequest ID: ${requestId}\n\nError: ${errorMessage}\n\nPlease contact support with the Request ID.\n\nYour funds are safe on the blockchain.`);
+          }
+          
           setClaimingPolicyId(null)
         }
       }
@@ -207,7 +272,7 @@ export default function Dashboard() {
       
       // Call updateFloodThreshold on governance contract
       writeContract({
-        address: governanceAddress,
+        address: NORMALIZED_ADDRESSES.GOVERNANCE,
         abi: governanceAbi,
         functionName: 'updateFloodThreshold',
         args: [BigInt(newThreshold)],
@@ -317,7 +382,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-gray-500">Smart Contract Threshold</p>
                   <p className="text-gray-900 font-medium">
-                    {contractThreshold ? String(contractThreshold) : 'Loading...'} {dataSource.unit}
+                    {contractThreshold ? String(contractThreshold as bigint) : 'Loading...'} {dataSource.unit}
                   </p>
                 </div>
               </div>
@@ -348,81 +413,83 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Threshold Configuration */}
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="font-semibold text-gray-900">Risk Thresholds</h3>
-              <button
-                onClick={() => setShowThresholdEditor(!showThresholdEditor)}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                {showThresholdEditor ? '✓ Done' : '⚙️ Configure'}
-              </button>
-            </div>
-
-            {showThresholdEditor && (
-              <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-gray-700">Warning Threshold ({dataSource.unit})</label>
-                  <input
-                    type="number"
-                    value={warningThreshold}
-                    onChange={(e) => setWarningThreshold(Number(e.target.value))}
-                    className="w-32 px-3 py-1 border border-gray-300 rounded-md text-sm"
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-gray-700">Smart Contract Threshold ({dataSource.unit})</label>
-                  <input
-                    type="number"
-                    value={criticalThreshold}
-                    onChange={(e) => setCriticalThreshold(Number(e.target.value))}
-                    className="w-32 px-3 py-1 border border-gray-300 rounded-md text-sm"
-                  />
-                </div>
-                <div className="pt-2 border-t border-gray-200">
-                  <button
-                    onClick={() => handleUpdateThreshold(criticalThreshold)}
-                    disabled={isUpdatingThreshold || isClaimPending}
-                    className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
-                      isUpdatingThreshold || isClaimPending
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
-                  >
-                    {isUpdatingThreshold ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Updating Blockchain...
-                      </span>
-                    ) : (
-                      '⛓️ Save Threshold to Blockchain'
-                    )}
-                  </button>
-                  <p className="text-xs text-gray-500 mt-2 text-center">
-                    This will update the smart contract threshold. You'll need to sign a transaction.
-                  </p>
-                </div>
+          {/* Threshold Configuration - Admin Only */}
+          {isAdmin ? (
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold text-gray-900">Risk Thresholds (Admin Only)</h3>
+                <button
+                  onClick={() => setShowThresholdEditor(!showThresholdEditor)}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  {showThresholdEditor ? '✓ Done' : '⚙️ Configure'}
+                </button>
               </div>
-            )}
 
-            <div className="w-full bg-gray-200 rounded-full h-6 relative">
-              <div
-                className={`h-6 rounded-full transition-all duration-300 ${
-                  isCritical ? 'bg-red-600' : isRisky ? 'bg-orange-500' : 'bg-green-500'
-                }`}
-                style={{ width: `${floodPercentage}%` }}
-              />
+              {showThresholdEditor && (
+                <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-gray-700">Warning Threshold ({dataSource.unit})</label>
+                    <input
+                      type="number"
+                      value={warningThreshold}
+                      onChange={(e) => setWarningThreshold(Number(e.target.value))}
+                      className="w-32 px-3 py-1 border border-gray-300 rounded-md text-sm"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-gray-700">Smart Contract Threshold ({dataSource.unit})</label>
+                    <input
+                      type="number"
+                      value={criticalThreshold}
+                      onChange={(e) => setCriticalThreshold(Number(e.target.value))}
+                      className="w-32 px-3 py-1 border border-gray-300 rounded-md text-sm"
+                    />
+                  </div>
+                  <div className="pt-2 border-t border-gray-200">
+                    <button
+                      onClick={() => handleUpdateThreshold(criticalThreshold)}
+                      disabled={isUpdatingThreshold || isClaimPending}
+                      className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
+                        isUpdatingThreshold || isClaimPending
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      {isUpdatingThreshold ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Updating Blockchain...
+                        </span>
+                      ) : (
+                        '⛓️ Save Threshold to Blockchain'
+                      )}
+                    </button>
+                    <p className="text-xs text-gray-500 mt-2 text-center">
+                      This will update the smart contract threshold using admin privileges.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="w-full bg-gray-200 rounded-full h-6 relative">
+                <div
+                  className={`h-6 rounded-full transition-all duration-300 ${
+                    isCritical ? 'bg-red-600' : isRisky ? 'bg-orange-500' : 'bg-green-500'
+                  }`}
+                  style={{ width: `${floodPercentage}%` }}
+                />
+              </div>
+              <div className="flex justify-between mt-2 text-xs text-gray-500">
+                <span>0</span>
+                <span className="text-orange-600 font-medium">⚠️ {warningThreshold} ({(warningThreshold/100).toFixed(1)}ft)</span>
+                <span className="text-red-600 font-medium">🚨 {criticalThreshold} ({(criticalThreshold/100).toFixed(1)}ft)</span>
+              </div>
             </div>
-            <div className="flex justify-between mt-2 text-xs text-gray-500">
-              <span>0</span>
-              <span className="text-orange-600 font-medium">⚠️ {warningThreshold} ({(warningThreshold/100).toFixed(1)}ft)</span>
-              <span className="text-red-600 font-medium">🚨 {criticalThreshold} ({(criticalThreshold/100).toFixed(1)}ft)</span>
-            </div>
-          </div>
+          ) : null}
 
           {/* Status Indicators */}
           <div className="grid grid-cols-3 gap-4 mb-6">
@@ -444,15 +511,15 @@ export default function Dashboard() {
           </div>
 
           {/* Contract Threshold Info */}
-          {contractThreshold && (
+          {contractThreshold ? (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-start gap-3">
                 <span className="text-2xl">⛓️</span>
                 <div className="flex-1">
                   <p className="font-semibold text-blue-900 mb-1">Smart Contract Threshold</p>
                   <p className="text-sm text-blue-800">
-                    Claims can only be processed when flood level exceeds <strong>{String(contractThreshold)}</strong> {dataSource.unit}.
-                    {floodLevel && floodLevel > Number(contractThreshold) ? (
+                    Claims can only be processed when flood level exceeds <strong>{String(contractThreshold as bigint)}</strong> {dataSource.unit}.
+                    {floodLevel && floodLevel > Number(contractThreshold as bigint) ? (
                       <span className="text-green-700 font-medium"> ✓ Currently eligible for claims!</span>
                     ) : (
                       <span className="text-gray-600"> Current level: {floodLevel || '...'}</span>
@@ -461,7 +528,7 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Alert Messages */}
           {(isRisky || isCritical) && (
@@ -504,33 +571,35 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Claims Pool Status */}
-        <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-2xl shadow-lg p-8 border border-purple-100">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Claims Pool Status</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-lg p-4">
-              <p className="text-sm text-gray-600 mb-1">Total Pool Capacity</p>
-              <p className="text-2xl font-bold text-gray-900">{claimsPoolStatus.totalCapacity} HBAR</p>
-            </div>
-            <div className="bg-white rounded-lg p-4">
-              <p className="text-sm text-gray-600 mb-1">Available for Claims</p>
-              <p className="text-2xl font-bold text-green-600">{claimsPoolStatus.availableBalance} HBAR</p>
-              <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                  style={{
-                    width: `${Number(claimsPoolStatus.totalCapacity) > 0 ? (Number(claimsPoolStatus.availableBalance) / Number(claimsPoolStatus.totalCapacity)) * 100 : 0}%`
-                  }}
-                ></div>
+        {/* Claims Pool Status - Admin Only */}
+        {isAdmin && (
+          <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-2xl shadow-lg p-8 border border-purple-100">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Claims Pool Status (Admin Only)</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white rounded-lg p-4">
+                <p className="text-sm text-gray-600 mb-1">Total Pool Capacity</p>
+                <p className="text-2xl font-bold text-gray-900">{claimsPoolStatus.totalCapacity} HBAR</p>
+              </div>
+              <div className="bg-white rounded-lg p-4">
+                <p className="text-sm text-gray-600 mb-1">Available for Claims</p>
+                <p className="text-2xl font-bold text-green-600">{claimsPoolStatus.availableBalance} HBAR</p>
+                <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Number(claimsPoolStatus.totalCapacity) > 0 ? (Number(claimsPoolStatus.availableBalance) / Number(claimsPoolStatus.totalCapacity)) * 100 : 0}%`
+                    }}
+                  ></div>
+                </div>
+              </div>
+              <div className="bg-white rounded-lg p-4">
+                <p className="text-sm text-gray-600 mb-1">Total Claims Processed</p>
+                <p className="text-2xl font-bold text-orange-600">{claimsPoolStatus.totalClaimsProcessed} HBAR</p>
               </div>
             </div>
-            <div className="bg-white rounded-lg p-4">
-              <p className="text-sm text-gray-600 mb-1">Total Claims Processed</p>
-              <p className="text-2xl font-bold text-orange-600">{claimsPoolStatus.totalClaimsProcessed} HBAR</p>
-            </div>
+            <p className="text-xs text-gray-500 mt-4">This separate pool funds automatic claim payouts. Your premiums are kept separate.</p>
           </div>
-          <p className="text-xs text-gray-500 mt-4">This separate pool funds automatic claim payouts. Your premiums are kept separate.</p>
-        </div>
+        )}
 
         {/* Policies Grid */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
@@ -608,14 +677,16 @@ export default function Dashboard() {
 
         {/* Navigation */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <button
-            onClick={() => navigate('/analytics')}
-            className="bg-gradient-to-br from-purple-500 to-indigo-600 hover:shadow-xl rounded-lg p-6 transition-all text-left transform hover:scale-105"
-          >
-            <p className="text-2xl mb-2">📊</p>
-            <p className="font-bold text-white">Analytics</p>
-            <p className="text-sm text-purple-100">System metrics & insights</p>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => navigate('/analytics')}
+              className="bg-gradient-to-br from-purple-500 to-indigo-600 hover:shadow-xl rounded-lg p-6 transition-all text-left transform hover:scale-105"
+            >
+              <p className="text-2xl mb-2">📊</p>
+              <p className="font-bold text-white">Analytics</p>
+              <p className="text-sm text-purple-100">System metrics & insights</p>
+            </button>
+          )}
           <button
             onClick={() => navigate('/claims')}
             className="bg-white hover:shadow-lg rounded-lg p-6 transition-shadow text-left"
@@ -624,14 +695,16 @@ export default function Dashboard() {
             <p className="font-bold text-gray-900">Claims</p>
             <p className="text-sm text-gray-600">View your claims</p>
           </button>
-          <button
-            onClick={() => navigate('/pool')}
-            className="bg-white hover:shadow-lg rounded-lg p-6 transition-shadow text-left"
-          >
-            <p className="text-2xl mb-2">💰</p>
-            <p className="font-bold text-gray-900">Pool</p>
-            <p className="text-sm text-gray-600">Liquidity & Reserve</p>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => navigate('/pool')}
+              className="bg-white hover:shadow-lg rounded-lg p-6 transition-shadow text-left"
+            >
+              <p className="text-2xl mb-2">💰</p>
+              <p className="font-bold text-gray-900">Pool</p>
+              <p className="text-sm text-gray-600">Liquidity & Reserve</p>
+            </button>
+          )}
           <button
             onClick={() => navigate('/connect')}
             className="bg-white hover:shadow-lg rounded-lg p-6 transition-shadow text-left"
@@ -753,7 +826,7 @@ export default function Dashboard() {
                     }`}
                     title={isRisky 
                       ? 'Submit claim for payout via blockchain transaction' 
-                      : `Flood level must exceed smart contract threshold (${contractThreshold ? String(contractThreshold) : '...'}) to claim`
+                      : `Flood level must exceed smart contract threshold (${contractThreshold ? String(contractThreshold as bigint) : '...'}) to claim`
                     }
                   >
                     {claimingPolicyId === selectedPolicy.id ? (
