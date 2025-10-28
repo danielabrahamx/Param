@@ -215,7 +215,7 @@ To test the complete platform with backend integration:
 
 ## Recent Changes (Replit Setup)
 
-### October 28, 2025 - Monitoring Station Updated to Nile River, Aswan High Dam ✅
+### October 28, 2025 - Complete Nile River Integration with Thresholds ✅
 
 **Monitoring Station Change:**
 - ✅ **Updated Oracle Data Source**: Replaced Washington DC Potomac River station with Nile River at Aswan High Dam, Egypt
@@ -226,16 +226,25 @@ To test the complete platform with backend integration:
   - Warning threshold: 178m (17800 cm)
   - Critical threshold: 181m (18100 cm)
 - ✅ **Data Source**: Nile Basin Initiative / Egypt Ministry of Water Resources
+- ✅ **Backend Fallback Thresholds**: Updated all default values from 1500 to 18100 cm (Lake Nasser critical level)
+- ✅ **Database Seeded**: Initialized with Nile River values (17500 cm current level, 18100 cm threshold)
+- ✅ **Frontend Dashboard**: Updated default display values, removed all Potomac/feet references
 - ✅ **Consistent Mapping**: All oracle endpoints (flood-level, flood-history, thresholds) use unified station ID mapping
 - ✅ **Backend Files Updated**:
-  - `backend-simple/routes/oracle.js` (active/running backend)
+  - `backend-simple/routes/oracle.js` (active/running backend - oracle data)
+  - `backend-simple/routes/admin.js` (active/running backend - admin endpoints)
   - `backend/oracle-service/src/routes/oracle.ts` (reference microservice)
+  - `frontend/src/pages/Dashboard.tsx` (frontend UI display)
 
 **Why Aswan High Dam?**
 - One of Africa's most important water monitoring locations
 - Manages Lake Nasser, one of the world's largest man-made reservoirs
 - Critical infrastructure for millions of people across northeastern Africa
 - Significant flood risk management and agricultural water supply
+
+**Data Flow:**
+- PostgreSQL Database (oracle_config table) → Backend API → Frontend Dashboard → User Display
+- Smart contract sync requires manual execution: `node contracts/scripts/update-flood-level.js`
 
 ### October 28, 2025 - Backend Complete with Security Implementation ✅
 
