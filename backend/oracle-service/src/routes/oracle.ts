@@ -10,54 +10,63 @@ router.get('/flood-level/:location', async (req, res) => {
   try {
     const { location } = req.params;
     
-    // Map location to USGS site
-    const usgsSite = location === '1' ? '01646500' : location;
+    // Map location to Nile River station
+    const stationId = location === '1' ? 'ASWAN-001' : location;
     
     const reading = await db.select().from(floodReadings)
-      .where(eq(floodReadings.location, usgsSite))
+      .where(eq(floodReadings.location, stationId))
       .orderBy(desc(floodReadings.timestamp))
       .limit(1);
     
     if (reading.length === 0) {
-      // Return mock data with USGS info
+      // Return mock data with Nile River info
       return res.json({ 
-        location: usgsSite, 
-        level: 150, 
+        location: stationId, 
+        level: 17500, 
         timestamp: new Date(),
-        dataSource: 'USGS Water Services',
-        station: 'POTOMAC RIVER NEAR WASH, DC LITTLE FALLS PUMP STA',
-        stationId: '01646500',
-        usgsLink: `https://waterdata.usgs.gov/monitoring-location/${usgsSite}`,
-        updateFrequency: '15-60 minutes',
-        unit: 'feet x 100'
+        dataSource: 'Nile Basin Initiative / Egypt Ministry of Water Resources',
+        station: 'NILE RIVER AT ASWAN HIGH DAM, LAKE NASSER',
+        stationId: 'ASWAN-001',
+        country: 'Egypt',
+        river: 'Nile River',
+        infoLink: `https://nilebasin.org`,
+        updateFrequency: 'Daily',
+        unit: 'centimeters above MSL',
+        description: 'Lake Nasser water level monitoring at Aswan High Dam'
       });
     }
     
     res.json({ 
-      location: usgsSite, 
+      location: stationId, 
       level: reading[0].level, 
       timestamp: reading[0].timestamp,
-      dataSource: 'USGS Water Services',
-      station: 'POTOMAC RIVER NEAR WASH, DC LITTLE FALLS PUMP STA',
-      stationId: usgsSite,
-      usgsLink: `https://waterdata.usgs.gov/monitoring-location/${usgsSite}`,
-      updateFrequency: '15-60 minutes',
-      unit: 'feet x 100'
+      dataSource: 'Nile Basin Initiative / Egypt Ministry of Water Resources',
+      station: 'NILE RIVER AT ASWAN HIGH DAM, LAKE NASSER',
+      stationId: stationId,
+      country: 'Egypt',
+      river: 'Nile River',
+      infoLink: `https://nilebasin.org`,
+      updateFrequency: 'Daily',
+      unit: 'centimeters above MSL',
+      description: 'Lake Nasser water level monitoring at Aswan High Dam'
     });
   } catch (error) {
     console.error('Error fetching flood level:', error);
     // Return mock data on error
-    const usgsId = '01646500';
+    const defaultStationId = 'ASWAN-001';
     res.json({ 
-      location: usgsId, 
-      level: 150, 
+      location: defaultStationId, 
+      level: 17500, 
       timestamp: new Date(),
-      dataSource: 'USGS Water Services',
-      station: 'POTOMAC RIVER NEAR WASH, DC LITTLE FALLS PUMP STA',
-      stationId: usgsId,
-      usgsLink: `https://waterdata.usgs.gov/monitoring-location/${usgsId}`,
-      updateFrequency: '15-60 minutes',
-      unit: 'feet x 100'
+      dataSource: 'Nile Basin Initiative / Egypt Ministry of Water Resources',
+      station: 'NILE RIVER AT ASWAN HIGH DAM, LAKE NASSER',
+      stationId: defaultStationId,
+      country: 'Egypt',
+      river: 'Nile River',
+      infoLink: `https://nilebasin.org`,
+      updateFrequency: 'Daily',
+      unit: 'centimeters above MSL',
+      description: 'Lake Nasser water level monitoring at Aswan High Dam'
     });
   }
 });
@@ -103,13 +112,17 @@ router.get('/thresholds/:location', async (req, res) => {
   try {
     const { location } = req.params;
     
-    // In production, these would be stored in database
+    // Aswan High Dam thresholds based on operational levels
+    // Lake Nasser operates between 147-182 meters MSL
+    // Warning at 178m (17800cm), Critical at 181m (18100cm)
     res.json({
       location,
-      warningThreshold: 2400,
-      criticalThreshold: 3000,
-      unit: 'mm',
-      lastUpdated: new Date()
+      warningThreshold: 17800,
+      criticalThreshold: 18100,
+      unit: 'centimeters above MSL',
+      normalRange: { min: 14700, max: 18200 },
+      lastUpdated: new Date(),
+      description: 'Lake Nasser operates between 147-182 meters above Mean Sea Level'
     });
   } catch (error) {
     console.error('Error fetching thresholds:', error);
