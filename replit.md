@@ -55,6 +55,14 @@ The frontend uses the following environment variables (configured in `frontend/.
 - `VITE_POOL_ADDRESS`: InsurancePool contract address
 - `VITE_GOVERNANCE_ADDRESS`: Governance contract address
 
+### Vite Configuration
+The `frontend/vite.config.ts` is configured for Replit's environment:
+- **Host**: `0.0.0.0` (required for Replit)
+- **Port**: `5000` (frontend port)
+- **HMR**: Uses `REPLIT_DEV_DOMAIN` environment variable for hot module reload
+  - This enables live code updates without refreshing the browser
+  - The domain is automatically provided by Replit
+
 ### Deployment Settings
 - **Type**: Autoscale (stateless website)
 - **Build**: `npm run build --prefix frontend`
