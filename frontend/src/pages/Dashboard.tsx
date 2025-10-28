@@ -145,13 +145,13 @@ export default function Dashboard() {
     // Check if already claimed
     if (policy.payoutTriggered) {
       console.warn('Policy already claimed:', policy.id)
-      alert('⚠️ This policy has already been claimed!')
+      alert(' This policy has already been claimed!')
       return
     }
 
     try {
       setClaimingPolicyId(policy.id)
-      console.log('🔔 Triggering blockchain payout for policy:', {
+      console.log(' Triggering blockchain payout for policy:', {
         policyId: policy.id,
         policyAddress: policy.policyAddress,
         coverage: policy.coverage,
@@ -170,8 +170,8 @@ export default function Dashboard() {
       // The transaction will be handled by the useWaitForTransactionReceipt hook
       // which will update isClaimSuccess when confirmed
     } catch (error: any) {
-      console.error('❌ Error initiating claim transaction:', error);
-      alert(`❌ Failed to initiate claim: ${error.message || 'Unknown error'}`)
+      console.error(' Error initiating claim transaction:', error);
+      alert(` Failed to initiate claim: ${error.message || 'Unknown error'}`)
       setClaimingPolicyId(null)
     }
   }
@@ -179,7 +179,7 @@ export default function Dashboard() {
   // Watch for successful claim transaction
   useEffect(() => {
     if (isClaimSuccess && claimingPolicyId) {
-      console.log('✅ Claim transaction confirmed on blockchain:', claimTxHash);
+      console.log(' Claim transaction confirmed on blockchain:', claimTxHash);
       
       // Record the claim in the backend after blockchain confirmation
       const recordClaim = async (retryCount = 0) => {
@@ -203,8 +203,8 @@ export default function Dashboard() {
             amount: policy.coverage,
           })
           
-          console.log('✅ Claim recorded in backend:', response.data);
-          alert(`✅ Claim successful!\n\nTransaction Hash: ${String(claimTxHash)}\nClaim ID: ${String(response.data.id)}\n\nPayout has been sent to your wallet!`)
+          console.log(' Claim recorded in backend:', response.data);
+          alert(` Claim successful!\n\nTransaction Hash: ${String(claimTxHash)}\nClaim ID: ${String(response.data.id)}\n\nPayout has been sent to your wallet!`)
           
           setSelectedPolicy(null)
           setClaimingPolicyId(null)
@@ -214,7 +214,7 @@ export default function Dashboard() {
           const errorMessage = errorData.message || error.message || 'Unknown error';
           const requestId = errorData.requestId || 'unknown';
           
-          console.error('❌ Error recording claim in backend:', {
+          console.error(' Error recording claim in backend:', {
             status: error.response?.status,
             data: errorData,
             message: errorMessage,
@@ -230,7 +230,7 @@ export default function Dashboard() {
              errorMessage.includes('persistence'));
 
           if (isRetryable) {
-            console.log(`⏳ Transient error detected, retrying in 2 seconds (attempt ${retryCount + 2}/3)...`);
+            console.log(` Transient error detected, retrying in 2 seconds (attempt ${retryCount + 2}/3)...`);
             await new Promise(resolve => setTimeout(resolve, 2000));
             return recordClaim(retryCount + 1);
           }
@@ -238,13 +238,13 @@ export default function Dashboard() {
           // Handle different error scenarios
           if (error.response?.status === 400) {
             // Business logic error (already claimed, etc.)
-            alert(`❌ ${errorData.error || errorMessage}\n\n${errorData.hint || ''}\n\nTransaction Hash: ${claimTxHash}`);
+            alert(` ${errorData.error || errorMessage}\n\n${errorData.hint || ''}\n\nTransaction Hash: ${claimTxHash}`);
           } else if (error.response?.status === 402) {
             // Insufficient funds
-            alert(`❌ Insufficient funds in claims pool\n\nRequested: ${errorData.requested}\nAvailable: ${errorData.available}\n\nTransaction Hash: ${claimTxHash}\n\nPlease contact support.`);
+            alert(` Insufficient funds in claims pool\n\nRequested: ${errorData.requested}\nAvailable: ${errorData.available}\n\nTransaction Hash: ${claimTxHash}\n\nPlease contact support.`);
           } else {
             // Generic persistence or server error
-            alert(`⚠️ Blockchain transaction succeeded but database operation failed.\n\nTransaction Hash: ${claimTxHash}\nRequest ID: ${requestId}\n\nError: ${errorMessage}\n\nPlease contact support with the Request ID.\n\nYour funds are safe on the blockchain.`);
+            alert(` Blockchain transaction succeeded but database operation failed.\n\nTransaction Hash: ${claimTxHash}\nRequest ID: ${requestId}\n\nError: ${errorMessage}\n\nPlease contact support with the Request ID.\n\nYour funds are safe on the blockchain.`);
           }
           
           setClaimingPolicyId(null)
@@ -259,7 +259,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (claimError) {
       console.error('Claim transaction error:', claimError);
-      alert(`❌ Transaction failed: ${claimError.message}`)
+      alert(` Transaction failed: ${claimError.message}`)
       setClaimingPolicyId(null)
     }
   }, [claimError])
@@ -279,10 +279,10 @@ export default function Dashboard() {
       })
       
       // Wait for confirmation - handled by useWaitForTransactionReceipt
-      alert(`📤 Threshold update transaction sent! Please confirm in MetaMask.`)
+      alert(` Threshold update transaction sent! Please confirm in MetaMask.`)
     } catch (error: any) {
       console.error('Error updating threshold:', error)
-      alert(`❌ Failed to update threshold: ${error.message}`)
+      alert(` Failed to update threshold: ${error.message}`)
       setIsUpdatingThreshold(false)
     }
   }
@@ -290,7 +290,7 @@ export default function Dashboard() {
   // Watch for threshold update success
   useEffect(() => {
     if (isClaimSuccess && isUpdatingThreshold) {
-      alert(`✅ Threshold updated successfully on blockchain!`)
+      alert(` Threshold updated successfully on blockchain!`)
       setIsUpdatingThreshold(false)
       // Refresh to show new threshold
       window.location.reload()
@@ -392,7 +392,7 @@ export default function Dashboard() {
               isRisky ? 'bg-orange-100 text-orange-800' : 
               'bg-green-100 text-green-800'
             }`}>
-              {isCritical ? '🚨 CRITICAL' : isRisky ? '⚠️ WARNING' : '✅ SAFE'}
+              {isCritical ? ' CRITICAL' : isRisky ? ' WARNING' : ' SAFE'}
             </div>
           </div>
 
@@ -422,7 +422,7 @@ export default function Dashboard() {
                   onClick={() => setShowThresholdEditor(!showThresholdEditor)}
                   className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                 >
-                  {showThresholdEditor ? '✓ Done' : '⚙️ Configure'}
+                  {showThresholdEditor ? ' Done' : ' Configure'}
                 </button>
               </div>
 
@@ -465,7 +465,7 @@ export default function Dashboard() {
                           Updating Blockchain...
                         </span>
                       ) : (
-                        '⛓️ Save Threshold to Blockchain'
+                        ' Save Threshold to Blockchain'
                       )}
                     </button>
                     <p className="text-xs text-gray-500 mt-2 text-center">
@@ -485,8 +485,8 @@ export default function Dashboard() {
               </div>
               <div className="flex justify-between mt-2 text-xs text-gray-500">
                 <span>0</span>
-                <span className="text-orange-600 font-medium">⚠️ {warningThreshold} ({(warningThreshold/100).toFixed(1)}m)</span>
-                <span className="text-red-600 font-medium">🚨 {criticalThreshold} ({(criticalThreshold/100).toFixed(1)}m)</span>
+                <span className="text-orange-600 font-medium"> {warningThreshold} ({(warningThreshold/100).toFixed(1)}m)</span>
+                <span className="text-red-600 font-medium"> {criticalThreshold} ({(criticalThreshold/100).toFixed(1)}m)</span>
               </div>
             </div>
           ) : null}
@@ -514,13 +514,13 @@ export default function Dashboard() {
           {contractThreshold ? (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-start gap-3">
-                <span className="text-2xl">⛓️</span>
+                <span className="text-2xl"></span>
                 <div className="flex-1">
                   <p className="font-semibold text-blue-900 mb-1">Smart Contract Threshold</p>
                   <p className="text-sm text-blue-800">
                     Claims can only be processed when flood level exceeds <strong>{String(contractThreshold as bigint)}</strong> {dataSource.unit}.
                     {floodLevel && floodLevel > Number(contractThreshold as bigint) ? (
-                      <span className="text-green-700 font-medium"> ✓ Currently eligible for claims!</span>
+                      <span className="text-green-700 font-medium">  Currently eligible for claims!</span>
                     ) : (
                       <span className="text-gray-600"> Current level: {floodLevel || '...'}</span>
                     )}
@@ -536,7 +536,7 @@ export default function Dashboard() {
               isCritical ? 'bg-red-50 border-2 border-red-300' : 'bg-orange-50 border-2 border-orange-300'
             }`}>
               <div className="flex gap-3">
-                <span className="text-2xl">{isCritical ? '🚨' : '⚠️'}</span>
+                <span className="text-2xl">{isCritical ? '' : ''}</span>
                 <div className="flex-1">
                   <p className={`font-bold mb-1 ${
                     isCritical ? 'text-red-800' : 'text-orange-800'
@@ -559,7 +559,7 @@ export default function Dashboard() {
           {!isRisky && !isCritical && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
               <div className="flex gap-3">
-                <span className="text-2xl">✅</span>
+                <span className="text-2xl"></span>
                 <div className="flex-1">
                   <p className="font-bold text-green-800 mb-1">System Status: Normal</p>
                   <p className="text-sm text-green-700">
@@ -641,7 +641,7 @@ export default function Dashboard() {
                     <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
                       policy.payoutTriggered ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
                     }`}>
-                      {policy.payoutTriggered ? '✓ Payout Sent' : 'Active'}
+                      {policy.payoutTriggered ? ' Payout Sent' : 'Active'}
                     </div>
                   </div>
                   <div className="space-y-3">
@@ -656,7 +656,7 @@ export default function Dashboard() {
                     <div className="flex justify-between pt-2 border-t border-gray-200">
                       <span className="text-gray-600">Status:</span>
                       <span className="font-semibold text-gray-900">
-                        {policy.payoutTriggered ? '✓ Claimed' : '🛡️ Protected'}
+                        {policy.payoutTriggered ? ' Claimed' : ' Protected'}
                       </span>
                     </div>
                     <button 
@@ -700,7 +700,7 @@ export default function Dashboard() {
               onClick={() => navigate('/pool')}
               className="bg-white hover:shadow-lg rounded-lg p-6 transition-shadow text-left"
             >
-              <p className="text-2xl mb-2">💰</p>
+              <p className="text-2xl mb-2"></p>
               <p className="font-bold text-gray-900">Pool</p>
               <p className="text-sm text-gray-600">Liquidity & Reserve</p>
             </button>
@@ -813,7 +813,7 @@ export default function Dashboard() {
               <div className="pt-4 border-t space-y-3">
                 {selectedPolicy.payoutTriggered ? (
                   <div className="w-full px-6 py-3 bg-green-50 border-2 border-green-500 text-green-800 font-medium rounded-lg text-center">
-                    ✅ Claim Already Processed
+                     Claim Already Processed
                   </div>
                 ) : (
                   <button
@@ -848,7 +848,7 @@ export default function Dashboard() {
                         </span>
                       )
                     ) : (
-                      '💰 Claim Payout Now (via MetaMask)'
+                      ' Claim Payout Now (via MetaMask)'
                     )}
                   </button>
                 )}

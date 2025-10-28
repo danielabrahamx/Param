@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useWriteContract, useAccount } from 'wagmi'
+import { useWriteContract, useAccount, useBalance } from 'wagmi'
 import { useNavigate } from 'react-router-dom'
-import { parseUnits } from 'viem'
+import { parseUnits, formatEther } from 'viem'
+import { hederaTestnet } from '../wagmi'
 
 const poolAbi = [
   {
@@ -20,41 +21,53 @@ const poolAbi = [
   }
 ]
 
-interface PoolData {
-  tvl: number
-  reserveRatio: number
-}
-
 function Pool() {
-  const [poolData, setPoolData] = useState<PoolData>({ tvl: 0, reserveRatio: 0 })
   const [depositAmount, setDepositAmount] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [totalCoverage, setTotalCoverage] = useState(0)
   const { address } = useAccount()
   const { writeContract } = useWriteContract()
   const navigate = useNavigate()
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL
-
-  useEffect(() => {
-    fetchPoolData()
-    const interval = setInterval(fetchPoolData, 10000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const fetchPoolData = async () => {
-    try {
-      const response = await fetch(`${backendUrl}/api/v1/pool`)
-      const data = await response.json()
-      setPoolData(data)
-    } catch (error) {
-      console.error('Error fetching pool data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const poolAddress = import.meta.env.VITE_POOL_ADDRESS as `0x${string}`
+
+  // Get actual pool balance from blockchain
+  const { data: poolBalanceData, isLoading: isBalanceLoading } = useBalance({
+    address: poolAddress,
+    chainId: hederaTestnet.id,
+    query: { enabled: Boolean(poolAddress), refetchInterval: 10000 }
+  })
+
+  const poolBalanceWei = poolBalanceData?.value ?? 0n
+  const tvl = poolBalanceWei > 0n ? parseFloat(formatEther(poolBalanceWei)) : 0
+  
+  // Fetch total coverage from backend to calculate reserve ratio
+  useEffect(() => {
+    const fetchTotalCoverage = async () => {
+      try {
+        const response = await fetch(`${backendUrl}/api/v1/policies`)
+        const data = await response.json()
+        const policies = data.policies || []
+        // Convert coverage from atto-HBAR to HBAR before summing
+        const total = policies
+          .filter((p: any) => !p.payoutTriggered)
+          .reduce((sum: number, p: any) => {
+            const coverageWei = BigInt(p.coverage || 0)
+            const coverageHbar = parseFloat(formatEther(coverageWei))
+            return sum + coverageHbar
+          }, 0)
+        setTotalCoverage(total)
+      } catch (error) {
+        console.error('Error fetching total coverage:', error)
+      }
+    }
+    fetchTotalCoverage()
+    const interval = setInterval(fetchTotalCoverage, 10000)
+    return () => clearInterval(interval)
+  }, [backendUrl])
+
+  const reserveRatio = totalCoverage > 0 ? (tvl / totalCoverage) * 100 : 0
 
   const handleDeposit = () => {
     if (!depositAmount || !poolAddress) return
@@ -78,7 +91,7 @@ function Pool() {
     setWithdrawAmount('')
   }
 
-  const reserveHealth = Math.min((poolData.reserveRatio / 150) * 100, 100)
+  const reserveHealth = Math.min((reserveRatio / 150) * 100, 100)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-6">
@@ -98,7 +111,7 @@ function Pool() {
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Insurance Pool</h1>
           <p className="text-gray-600 mb-8">Manage liquidity and monitor pool health</p>
 
-          {loading ? (
+          {isBalanceLoading ? (
             <div className="flex justify-center items-center py-12">
               <svg className="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -112,15 +125,15 @@ function Pool() {
                 {/* TVL Card */}
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-6 border-2 border-blue-200">
                   <p className="text-gray-700 text-sm font-semibold mb-2">Total Value Locked</p>
-                  <p className="text-4xl font-bold text-blue-600">{poolData.tvl.toFixed(2)} HBAR</p>
-                  <p className="text-xs text-gray-600 mt-2">💰 Available liquidity for claims</p>
+                  <p className="text-4xl font-bold text-blue-600">{tvl.toFixed(2)} HBAR</p>
+                  <p className="text-xs text-gray-600 mt-2">Available liquidity for claims</p>
                 </div>
 
                 {/* Reserve Ratio Card */}
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-6 border-2 border-green-200">
                   <p className="text-gray-700 text-sm font-semibold mb-2">Reserve Ratio</p>
-                  <p className="text-4xl font-bold text-green-600">{poolData.reserveRatio.toFixed(1)}%</p>
-                  <p className="text-xs text-gray-600 mt-2">📊 Required: 150% | Status: {poolData.reserveRatio >= 150 ? '✓ Healthy' : '⚠️ Low'}</p>
+                  <p className="text-4xl font-bold text-green-600">{reserveRatio.toFixed(1)}%</p>
+                  <p className="text-xs text-gray-600 mt-2">Required: 150% | Status: {reserveRatio >= 150 ? 'Healthy' : 'Low'}</p>
                 </div>
               </div>
 
@@ -133,7 +146,7 @@ function Pool() {
                 <div className="w-full bg-gray-300 rounded-full h-3">
                   <div
                     className={`h-3 rounded-full transition-all duration-300 ${
-                      poolData.reserveRatio >= 150 ? 'bg-green-500' : poolData.reserveRatio >= 120 ? 'bg-orange-500' : 'bg-red-500'
+                      reserveRatio >= 150 ? 'bg-green-500' : reserveRatio >= 120 ? 'bg-orange-500' : 'bg-red-500'
                     }`}
                     style={{ width: `${reserveHealth}%` }}
                   />
@@ -193,7 +206,7 @@ function Pool() {
                   {/* Warning */}
                   <div className="mt-4 p-4 bg-orange-50 border-2 border-orange-200 rounded-lg">
                     <p className="text-sm text-orange-800">
-                      <span className="font-semibold">⚠️ Warning:</span> Ensure reserve ratio stays above 150% to support claims.
+                      <span className="font-semibold">Warning:</span> Ensure reserve ratio stays above 150% to support claims.
                     </p>
                   </div>
                 </div>
@@ -206,7 +219,7 @@ function Pool() {
                   <li>• The pool maintains a 150% reserve ratio to ensure all claims can be paid</li>
                   <li>• Liquidity providers earn a portion of premiums</li>
                   <li>• Admins manage deposits and withdrawals to maintain health</li>
-                  <li>• Current pool protects {Math.floor(poolData.tvl / 0.1)} policies with 0.1 HBAR coverage</li>
+                  <li>• Current pool balance: {tvl.toFixed(2)} HBAR (live from blockchain)</li>
                 </ul>
               </div>
             </div>

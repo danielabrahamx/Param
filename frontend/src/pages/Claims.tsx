@@ -60,13 +60,13 @@ function Claims() {
   const getStatusIcon = (status: string) => {
     switch(status) {
       case 'approved':
-        return '✓'
+        return '[Approved]'
       case 'rejected':
-        return '✕'
+        return '[Rejected]'
       case 'pending':
-        return '⏳'
+        return '[Pending]'
       default:
-        return '◯'
+        return '[Unknown]'
     }
   }
 
@@ -127,13 +127,13 @@ function Claims() {
                         onClick={() => handleReview(claim.id, 'approved')}
                         className="flex-1 py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
                       >
-                        ✓ Approve
+                        Approve
                       </button>
                       <button
                         onClick={() => handleReview(claim.id, 'rejected')}
                         className="flex-1 py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
                       >
-                        ✕ Reject
+                        Reject
                       </button>
                     </div>
                   )}

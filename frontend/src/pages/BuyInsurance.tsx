@@ -51,17 +51,17 @@ const poolAddress = NORMALIZED_ADDRESSES.POOL
 
 // Validate contract address is loaded
 if (!policyFactoryAddress || policyFactoryAddress === '') {
-  console.error('❌ POLICY_FACTORY_ADDRESS not loaded from environment!')
+  console.error('POLICY_FACTORY_ADDRESS not loaded from environment!')
   console.error('Check that VITE_POLICY_FACTORY_ADDRESS is set in .env')
 }
 
 if (!governanceAddress || governanceAddress === '') {
-  console.error('❌ GOVERNANCE_ADDRESS not loaded from environment!')
+  console.error('GOVERNANCE_ADDRESS not loaded from environment!')
   console.error('Check that VITE_GOVERNANCE_ADDRESS is set in .env')
 }
 
 if (!poolAddress || poolAddress === '') {
-  console.error('❌ POOL_ADDRESS not loaded from environment!')
+  console.error('POOL_ADDRESS not loaded from environment!')
   console.error('Check that VITE_POOL_ADDRESS is set in .env')
 }
 
@@ -109,7 +109,7 @@ export default function BuyInsurance() {
 
   // Log errors for debugging
   if (writeError) {
-    console.error('❌ Transaction Error:', writeError)
+    console.error('Transaction Error:', writeError)
     console.error('Error details:', {
       message: writeError.message,
       name: writeError.name,
@@ -119,13 +119,13 @@ export default function BuyInsurance() {
 
   useEffect(() => {
     if (premiumRateError) {
-      console.error('❌ Failed to load premium rate from Governance contract:', premiumRateError)
+      console.error('Failed to load premium rate from Governance contract:', premiumRateError)
     }
   }, [premiumRateError])
 
   useEffect(() => {
     if (poolBalanceError) {
-      console.error('❌ Failed to load current pool balance:', poolBalanceError)
+      console.error('Failed to load current pool balance:', poolBalanceError)
     }
   }, [poolBalanceError])
 
@@ -138,7 +138,7 @@ export default function BuyInsurance() {
       const savePolicyToBackend = async () => {
         try {
           setIsSavingPolicy(true)
-          console.log('✅ Transaction confirmed on blockchain, saving to backend...')
+          console.log('Transaction confirmed on blockchain, saving to backend...')
           console.log('Receipt:', receipt)
           
           const backendUrl = import.meta.env.VITE_BACKEND_URL
@@ -159,12 +159,12 @@ export default function BuyInsurance() {
                 })
                 
                 if (decoded.eventName === 'PolicyCreated' && decoded.args) {
-                  console.log('📝 Decoded PolicyCreated event:', decoded)
+                  console.log('Decoded PolicyCreated event:', decoded)
                   const args = decoded.args as any
                   policyAddress = args.policyAddress as string
                   eventCoverage = formatEther(args.coverage as bigint)
                   eventPremium = formatEther(args.premium as bigint)
-                  console.log(`✅ Found policy address: ${policyAddress}`)
+                  console.log(`Found policy address: ${policyAddress}`)
                   break
                 }
               } catch (e) {
@@ -173,7 +173,7 @@ export default function BuyInsurance() {
               }
             }
           } catch (error) {
-            console.warn('⚠️ Could not decode event, will use fallback', error)
+            console.warn('Could not decode event, will use fallback', error)
           }
           
           const premiumHbar = parseFloat(eventPremium)
@@ -187,16 +187,16 @@ export default function BuyInsurance() {
             policyAddress: policyAddress,
           })
           
-          console.log('✅ Policy saved to backend successfully!')
+          console.log('Policy saved to backend successfully!')
           
           // Show success message and redirect
-          alert(`✅ Insurance policy purchased!\n\nCoverage: ${coverageHbar} HBAR\nPremium: ${premiumHbar} HBAR\nPolicy: ${policyAddress.slice(0, 10)}...${policyAddress.slice(-8)}\n\nRedirecting to dashboard...`)
+          alert(`Insurance policy purchased!\n\nCoverage: ${coverageHbar} HBAR\nPremium: ${premiumHbar} HBAR\nPolicy: ${policyAddress.slice(0, 10)}...${policyAddress.slice(-8)}\n\nRedirecting to dashboard...`)
           
           // Redirect to dashboard
           navigate('/dashboard')
         } catch (error: any) {
-          console.error('❌ Error saving policy to backend:', error)
-          alert(`⚠️ Blockchain transaction succeeded but failed to save to database.\n\nThis is a display issue. Please refresh or contact support.\n\nTransaction Hash: ${hash}`)
+          console.error('Error saving policy to backend:', error)
+          alert(`Blockchain transaction succeeded but failed to save to database.\n\nThis is a display issue. Please refresh or contact support.\n\nTransaction Hash: ${hash}`)
           
           // Still navigate to dashboard so user can see the transaction
           setTimeout(() => navigate('/dashboard'), 2000)
