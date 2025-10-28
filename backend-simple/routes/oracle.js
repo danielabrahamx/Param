@@ -23,6 +23,13 @@ router.get('/flood-level/:gaugeId?', async (req, res) => {
     const gaugeId = req.params.gaugeId || '01646500';
     const stationId = gaugeId === '1' ? '01646500' : gaugeId;
 
+    const unitResult = await db.query(
+      "SELECT value FROM oracle_config WHERE key = 'measurement_unit'"
+    );
+    const unit = unitResult.rows.length > 0 
+      ? unitResult.rows[0].value 
+      : 'feet x 100';
+
     res.json({
       location: stationId,
       level: floodLevel,
@@ -32,7 +39,7 @@ router.get('/flood-level/:gaugeId?', async (req, res) => {
       stationId: stationId,
       usgsLink: `https://waterdata.usgs.gov/monitoring-location/${stationId}`,
       updateFrequency: '15 minutes',
-      unit: 'feet x 100',
+      unit: unit,
       threshold: threshold,
       status: floodLevel && floodLevel >= threshold ? 'FLOOD' : 'NORMAL'
     });
