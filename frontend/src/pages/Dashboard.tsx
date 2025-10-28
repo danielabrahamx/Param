@@ -210,15 +210,19 @@ export default function Dashboard() {
           
           console.log('Recording claim in backend:', {
             policyId: policy.id,
+            policyAddress: policy.policyAddress,
             policyholder: policy.policyholder,
             amount: policy.coverage,
+            txHash: claimTxHash,
+            floodLevel,
             attempt: retryCount + 1,
           })
           
           const response = await axios.post(`${backendUrl}/api/v1/claims/create`, {
-            policyId: policy.id,
-            policyholder: policy.policyholder,
+            policyAddress: policy.policyAddress,
             amount: policy.coverage,
+            txHash: claimTxHash,
+            floodLevel,
           })
           
           console.log(' Claim recorded in backend:', response.data);
