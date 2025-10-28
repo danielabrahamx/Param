@@ -105,7 +105,7 @@ export default function BuyInsurance() {
   const chainId = useChainId()
   const { switchChain } = useSwitchChain()
   const navigate = useNavigate()
-  const [isSavingPolicy, setIsSavingPolicy] = useState(false)
+  const [processedReceipts, setProcessedReceipts] = useState<Set<string>>(new Set())
 
   // Log errors for debugging
   if (writeError) {
@@ -132,12 +132,21 @@ export default function BuyInsurance() {
   // Convert coverage (18 decimals / wei) to tinybar (8 decimals) for comparison with pool balance
   const coverageTinybar = coverageWei / 10n ** 10n
 
-  // Handle successful transaction - save policy to backend
+  // Handle successful transaction - save policy to backend (runs only once per transaction)
   useEffect(() => {
-    if (isSuccess && receipt && address && !isSavingPolicy) {
+    if (isSuccess && receipt && address && hash) {
+      const receiptHash = receipt.transactionHash
+      
+      // Prevent duplicate processing of same transaction
+      if (processedReceipts.has(receiptHash)) {
+        return
+      }
+      
       const savePolicyToBackend = async () => {
         try {
-          setIsSavingPolicy(true)
+          // Mark this receipt as being processed
+          setProcessedReceipts(prev => new Set(prev).add(receiptHash))
+          
           console.log('Transaction confirmed on blockchain, saving to backend...')
           console.log('Receipt:', receipt)
           
@@ -200,14 +209,12 @@ export default function BuyInsurance() {
           
           // Still navigate to dashboard so user can see the transaction
           setTimeout(() => navigate('/dashboard'), 2000)
-        } finally {
-          setIsSavingPolicy(false)
         }
       }
       
       savePolicyToBackend()
     }
-  }, [isSuccess, receipt, address, isSavingPolicy, coverage, premium, hash, navigate])
+  }, [isSuccess, receipt, address, hash])
 
   const handleBuy = () => {
     if (!coverage || !isConnected) {
