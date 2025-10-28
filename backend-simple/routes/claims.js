@@ -2,6 +2,15 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 
+// Convert HBAR to atto-HBAR (wei) - 1 HBAR = 10^18 atto-HBAR
+// Handle decimal inputs safely
+const hbarToAtto = (hbar) => {
+  const hbarStr = String(hbar);
+  const [whole = '0', decimal = ''] = hbarStr.split('.');
+  const paddedDecimal = decimal.padEnd(18, '0').slice(0, 18);
+  return BigInt(whole + paddedDecimal).toString();
+};
+
 router.post('/', async (req, res) => {
   try {
     const { 
@@ -49,7 +58,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const amountAtto = BigInt(amount).toString();
+    const amountAtto = hbarToAtto(amount);
 
     const result = await db.query(
       `INSERT INTO claims (policy_id, policy_address, amount, tx_hash, flood_level, status)
@@ -178,7 +187,7 @@ router.post('/create', async (req, res) => {
       });
     }
 
-    const amountAtto = amount ? BigInt(amount).toString() : policy.coverage;
+    const amountAtto = amount ? hbarToAtto(amount) : policy.coverage;
 
     const result = await db.query(
       `INSERT INTO claims (policy_id, policy_address, amount, tx_hash, flood_level, status)

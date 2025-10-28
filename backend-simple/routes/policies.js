@@ -19,8 +19,17 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const coverageAtto = BigInt(coverage).toString();
-    const premiumAtto = BigInt(premium).toString();
+    // Convert HBAR to atto-HBAR (wei) - 1 HBAR = 10^18 atto-HBAR
+    // Handle decimal inputs safely
+    const hbarToAtto = (hbar) => {
+      const hbarStr = String(hbar);
+      const [whole = '0', decimal = ''] = hbarStr.split('.');
+      const paddedDecimal = decimal.padEnd(18, '0').slice(0, 18);
+      return BigInt(whole + paddedDecimal).toString();
+    };
+
+    const coverageAtto = hbarToAtto(coverage);
+    const premiumAtto = hbarToAtto(premium);
 
     const result = await db.query(
       `INSERT INTO policies (policy_address, policyholder, coverage, premium, threshold, gauge_station_id)
