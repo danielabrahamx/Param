@@ -18,24 +18,21 @@ router.get('/flood-level/:gaugeId?', async (req, res) => {
 
     const threshold = thresholdResult.rows.length > 0 
       ? parseInt(thresholdResult.rows[0].value) 
-      : 18100;  // Lake Nasser critical threshold: 181m = 18100cm
+      : 1500;
 
-    const gaugeId = req.params.gaugeId || 'ASWAN-001';
-    const stationId = gaugeId === '1' ? 'ASWAN-001' : gaugeId;
+    const gaugeId = req.params.gaugeId || '01646500';
+    const stationId = gaugeId === '1' ? '01646500' : gaugeId;
 
     res.json({
       location: stationId,
       level: floodLevel,
       timestamp: new Date().toISOString(),
-      dataSource: 'Nile Basin Initiative / Egypt Ministry of Water Resources',
-      station: 'NILE RIVER AT ASWAN HIGH DAM, LAKE NASSER',
+      dataSource: 'USGS',
+      station: 'POTOMAC RIVER NEAR WASHINGTON, DC',
       stationId: stationId,
-      country: 'Egypt',
-      river: 'Nile River',
-      infoLink: 'https://nilebasin.org',
-      updateFrequency: 'Daily',
-      unit: 'centimeters above MSL',
-      description: 'Lake Nasser water level monitoring at Aswan High Dam',
+      usgsLink: `https://waterdata.usgs.gov/monitoring-location/${stationId}`,
+      updateFrequency: '15 minutes',
+      unit: 'feet x 100',
       threshold: threshold,
       status: floodLevel && floodLevel >= threshold ? 'FLOOD' : 'NORMAL'
     });

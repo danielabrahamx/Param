@@ -21,12 +21,9 @@ interface FloodData {
   dataSource?: string
   station?: string
   stationId?: string
-  infoLink?: string
+  usgsLink?: string
   updateFrequency?: string
   unit?: string
-  country?: string
-  river?: string
-  description?: string
 }
 
 export default function Dashboard() {
@@ -41,11 +38,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [criticalThreshold, setCriticalThreshold] = useState(() => {
     const stored = localStorage.getItem('criticalThreshold')
-    return stored ? Number(stored) : 18100  // Lake Nasser critical: 181m = 18100cm
+    return stored ? Number(stored) : 1500
   })
   const [warningThreshold, setWarningThreshold] = useState(() => {
     const stored = localStorage.getItem('warningThreshold')
-    return stored ? Number(stored) : 17800  // Lake Nasser warning: 178m = 17800cm
+    return stored ? Number(stored) : 1200
   })
   const [showThresholdEditor, setShowThresholdEditor] = useState(false)
   const [selectedPolicy, setSelectedPolicy] = useState<Policy | null>(null)
@@ -311,12 +308,12 @@ export default function Dashboard() {
 
   const getDataSourceInfo = () => {
     return {
-      source: floodData?.dataSource || 'Nile Basin Initiative / Egypt Ministry of Water Resources',
-      station: floodData?.station || 'NILE RIVER AT ASWAN HIGH DAM, LAKE NASSER',
-      stationId: floodData?.stationId || 'ASWAN-001',
-      infoLink: (floodData as any)?.infoLink || 'https://nilebasin.org',
-      updateFrequency: floodData?.updateFrequency || 'Daily',
-      unit: floodData?.unit || 'centimeters above MSL',
+      source: floodData?.dataSource || 'USGS',
+      station: floodData?.station || 'POTOMAC RIVER NEAR WASHINGTON, DC',
+      stationId: floodData?.stationId || '01646500',
+      usgsLink: (floodData as any)?.usgsLink || 'https://waterdata.usgs.gov/monitoring-location/01646500',
+      updateFrequency: floodData?.updateFrequency || '15 minutes',
+      unit: floodData?.unit || 'feet x 100',
       lastUpdate: floodData?.timestamp ? new Date(floodData.timestamp).toLocaleString() : 'N/A'
     }
   }
@@ -362,7 +359,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-gray-500">Station ID</p>
                   <a 
-                    href={dataSource.infoLink}
+                    href={dataSource.usgsLink}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:text-blue-800 font-medium underline"
