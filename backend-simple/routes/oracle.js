@@ -18,7 +18,7 @@ router.get('/flood-level/:gaugeId?', async (req, res) => {
 
     const threshold = thresholdResult.rows.length > 0 
       ? parseInt(thresholdResult.rows[0].value) 
-      : 1500;
+      : 18100;  // Lake Nasser critical threshold: 181m = 18100cm
 
     const gaugeId = req.params.gaugeId || 'ASWAN-001';
     const stationId = gaugeId === '1' ? 'ASWAN-001' : gaugeId;

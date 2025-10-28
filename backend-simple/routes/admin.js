@@ -74,7 +74,7 @@ router.put('/flood-level', async (req, res) => {
 
     const threshold = thresholdResult.rows.length > 0 
       ? parseInt(thresholdResult.rows[0].value) 
-      : 10;
+      : 18100;  // Lake Nasser critical threshold: 181m = 18100cm
 
     console.log('✅ Flood level updated to:', levelInt);
 
@@ -102,7 +102,7 @@ router.get('/threshold', async (req, res) => {
 
     const threshold = result.rows.length > 0 
       ? parseInt(result.rows[0].value) 
-      : 10;
+      : 18100;  // Lake Nasser critical threshold: 181m = 18100cm
 
     res.json({
       success: true,

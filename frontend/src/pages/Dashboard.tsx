@@ -21,9 +21,12 @@ interface FloodData {
   dataSource?: string
   station?: string
   stationId?: string
-  usgsLink?: string
+  infoLink?: string
   updateFrequency?: string
   unit?: string
+  country?: string
+  river?: string
+  description?: string
 }
 
 export default function Dashboard() {
@@ -38,11 +41,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [criticalThreshold, setCriticalThreshold] = useState(() => {
     const stored = localStorage.getItem('criticalThreshold')
-    return stored ? Number(stored) : 1500
+    return stored ? Number(stored) : 18100  // Lake Nasser critical: 181m = 18100cm
   })
   const [warningThreshold, setWarningThreshold] = useState(() => {
     const stored = localStorage.getItem('warningThreshold')
-    return stored ? Number(stored) : 1000
+    return stored ? Number(stored) : 17800  // Lake Nasser warning: 178m = 17800cm
   })
   const [showThresholdEditor, setShowThresholdEditor] = useState(false)
   const [selectedPolicy, setSelectedPolicy] = useState<Policy | null>(null)
@@ -308,12 +311,12 @@ export default function Dashboard() {
 
   const getDataSourceInfo = () => {
     return {
-      source: floodData?.dataSource || 'USGS Water Services',
-      station: floodData?.station || 'POTOMAC RIVER NEAR WASH, DC LITTLE FALLS PUMP STA',
-      stationId: floodData?.stationId || '01646500',
-      usgsLink: floodData?.usgsLink || 'https://waterdata.usgs.gov/monitoring-location/01646500',
-      updateFrequency: floodData?.updateFrequency || '15-60 minutes',
-      unit: floodData?.unit || 'feet x 100',
+      source: floodData?.dataSource || 'Nile Basin Initiative / Egypt Ministry of Water Resources',
+      station: floodData?.station || 'NILE RIVER AT ASWAN HIGH DAM, LAKE NASSER',
+      stationId: floodData?.stationId || 'ASWAN-001',
+      infoLink: (floodData as any)?.infoLink || 'https://nilebasin.org',
+      updateFrequency: floodData?.updateFrequency || 'Daily',
+      unit: floodData?.unit || 'centimeters above MSL',
       lastUpdate: floodData?.timestamp ? new Date(floodData.timestamp).toLocaleString() : 'N/A'
     }
   }
@@ -359,7 +362,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-gray-500">Station ID</p>
                   <a 
-                    href={dataSource.usgsLink}
+                    href={dataSource.infoLink}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:text-blue-800 font-medium underline"
@@ -485,8 +488,8 @@ export default function Dashboard() {
               </div>
               <div className="flex justify-between mt-2 text-xs text-gray-500">
                 <span>0</span>
-                <span className="text-orange-600 font-medium">⚠️ {warningThreshold} ({(warningThreshold/100).toFixed(1)}ft)</span>
-                <span className="text-red-600 font-medium">🚨 {criticalThreshold} ({(criticalThreshold/100).toFixed(1)}ft)</span>
+                <span className="text-orange-600 font-medium">⚠️ {warningThreshold} ({(warningThreshold/100).toFixed(1)}m)</span>
+                <span className="text-red-600 font-medium">🚨 {criticalThreshold} ({(criticalThreshold/100).toFixed(1)}m)</span>
               </div>
             </div>
           ) : null}
@@ -496,17 +499,17 @@ export default function Dashboard() {
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <p className="text-xs text-gray-600 mb-1">Safe Range</p>
               <p className="text-lg font-bold text-green-600">0 - {warningThreshold}</p>
-              <p className="text-xs text-gray-500 mt-1">0 - {(warningThreshold/100).toFixed(1)} feet</p>
+              <p className="text-xs text-gray-500 mt-1">0 - {(warningThreshold/100).toFixed(1)} meters</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <p className="text-xs text-gray-600 mb-1">Warning Range</p>
               <p className="text-lg font-bold text-orange-600">{warningThreshold} - {criticalThreshold}</p>
-              <p className="text-xs text-gray-500 mt-1">{(warningThreshold/100).toFixed(1)} - {(criticalThreshold/100).toFixed(1)} feet</p>
+              <p className="text-xs text-gray-500 mt-1">{(warningThreshold/100).toFixed(1)} - {(criticalThreshold/100).toFixed(1)} meters</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <p className="text-xs text-gray-600 mb-1">Critical Range</p>
               <p className="text-lg font-bold text-red-600">{criticalThreshold}+</p>
-              <p className="text-xs text-gray-500 mt-1">{(criticalThreshold/100).toFixed(1)}+ feet</p>
+              <p className="text-xs text-gray-500 mt-1">{(criticalThreshold/100).toFixed(1)}+ meters</p>
             </div>
           </div>
 
@@ -547,8 +550,8 @@ export default function Dashboard() {
                     isCritical ? 'text-red-700' : 'text-orange-700'
                   }`}>
                     {isCritical 
-                      ? `Water levels have exceeded the critical threshold by ${(floodLevel! - criticalThreshold)} mm. Smart contracts are automatically processing claims.`
-                      : `Water levels are ${(floodLevel! - warningThreshold)} mm above warning threshold. Continue monitoring closely.`
+                      ? `Water levels have exceeded the critical threshold by ${(floodLevel! - criticalThreshold)} cm. Smart contracts are automatically processing claims.`
+                      : `Water levels are ${(floodLevel! - warningThreshold)} cm above warning threshold. Continue monitoring closely.`
                     }
                   </p>
                 </div>
