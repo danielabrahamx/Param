@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { db } from '../db';
 import { floodReadings } from '../db/schema';
 import { eq, desc } from 'drizzle-orm';
@@ -6,7 +6,7 @@ import { eq, desc } from 'drizzle-orm';
 const router = Router();
 
 // Get current flood level with full metadata
-router.get('/flood-level/:location', async (req, res) => {
+router.get('/flood-level/:location', async (req: Request, res: Response) => {
   try {
     const { location } = req.params;
     
@@ -72,25 +72,28 @@ router.get('/flood-level/:location', async (req, res) => {
 });
 
 // Get flood level history for a location
-router.get('/flood-history/:location', async (req, res) => {
+router.get('/flood-history/:location', async (req: Request, res: Response) => {
   try {
     const { location } = req.params;
     const limit = parseInt(req.query.limit as string) || 24;
     
+    // Map location to Nile River station
+    const stationId = location === '1' ? 'ASWAN-001' : location;
+    
     const readings = await db.select().from(floodReadings)
-      .where(eq(floodReadings.location, location))
+      .where(eq(floodReadings.location, stationId))
       .orderBy(desc(floodReadings.timestamp))
       .limit(limit);
     
     if (readings.length === 0) {
-      // Return mock historical data
+      // Return mock historical data for Lake Nasser (147-182m MSL = 14700-18200cm)
       const mockData = [];
       const now = Date.now();
       for (let i = 0; i < Math.min(limit, 10); i++) {
         mockData.push({
           timestamp: new Date(now - i * 3600000).toISOString(),
-          level: 1500 + Math.floor(Math.random() * 1000),
-          location
+          level: 17000 + Math.floor(Math.random() * 1200),
+          location: stationId
         });
       }
       return res.json(mockData);
@@ -108,15 +111,18 @@ router.get('/flood-history/:location', async (req, res) => {
 });
 
 // Get threshold configuration
-router.get('/thresholds/:location', async (req, res) => {
+router.get('/thresholds/:location', async (req: Request, res: Response) => {
   try {
     const { location } = req.params;
+    
+    // Map location to Nile River station
+    const stationId = location === '1' ? 'ASWAN-001' : location;
     
     // Aswan High Dam thresholds based on operational levels
     // Lake Nasser operates between 147-182 meters MSL
     // Warning at 178m (17800cm), Critical at 181m (18100cm)
     res.json({
-      location,
+      location: stationId,
       warningThreshold: 17800,
       criticalThreshold: 18100,
       unit: 'centimeters above MSL',
@@ -131,17 +137,20 @@ router.get('/thresholds/:location', async (req, res) => {
 });
 
 // Update threshold configuration (admin only in production)
-router.post('/thresholds/:location', async (req, res) => {
+router.post('/thresholds/:location', async (req: Request, res: Response) => {
   try {
     const { location } = req.params;
     const { warningThreshold, criticalThreshold } = req.body;
+    
+    // Map location to Nile River station
+    const stationId = location === '1' ? 'ASWAN-001' : location;
     
     // TODO: Add authentication and authorization
     // TODO: Store in database
     
     res.json({
       success: true,
-      location,
+      location: stationId,
       warningThreshold,
       criticalThreshold,
       updated: new Date()
