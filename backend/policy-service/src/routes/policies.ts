@@ -37,64 +37,66 @@ router.get('/', async (req, res) => {
 // POST - Create a policy on-chain AND save to database (legacy backend flow)
 router.post('/', async (req, res) => {
   try {
-    // Check if this is an on-chain policy that needs to be saved
-    if (req.body.policyAddress !== undefined || req.body.policyholder) {
-      // Try to parse as save-on-chain request
+    // Check if this is a direct policy save with address from frontend
+    if (req.body.policyAddress && req.body.policyAddress !== '0x0000000000000000000000000000000000000000') {
       try {
-        const { coverage, premium, policyholder } = createPolicySchema.parse(req.body);
+        const { coverage, premium, policyholder, policyAddress } = req.body;
         
-        console.log('💾 Attempting to find and save on-chain policy for:', {
+        console.log('💾 Saving policy directly from frontend:', {
+          policyAddress,
           coverage,
           premium,
           policyholder,
         });
 
-        // Trigger sync to pull the most recent policy for this policyholder
-        console.log('🔄 Syncing policies from blockchain...');
-        await syncPolicies();
-
-        // Give the sync a moment to complete
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Now query for the policy we just created (should be the most recent one for this policyholder)
-        const recentPolicies = await db
+        // Check if policy already exists (idempotent)
+        const existing = await db
           .select()
           .from(policies)
-          .where(eq(policies.policyholder, policyholder as string))
-          .limit(10);
+          .where(eq(policies.policyAddress, policyAddress))
+          .limit(1);
 
-        // Find the policy that matches coverage (approximately, allowing for small rounding differences)
-        const matchedPolicy = recentPolicies.find(p => 
-          Math.abs(parseFloat(p.coverage) - coverage) < 0.1
-        );
-
-        if (matchedPolicy) {
-          console.log('✅ Found matching policy:', matchedPolicy);
+        if (existing.length > 0) {
+          console.log('✅ Policy already exists in database');
           res.setHeader('Content-Type', 'application/json');
-          res.status(201).send(JSON.stringify({
+          res.status(200).send(JSON.stringify({
             success: true,
-            id: matchedPolicy.id,
-            policyAddress: matchedPolicy.policyAddress,
-            coverage: matchedPolicy.coverage,
-            premium: matchedPolicy.premium,
-            policyholder: matchedPolicy.policyholder,
+            message: 'Policy already exists',
+            id: existing[0].id,
+            policyAddress: existing[0].policyAddress,
+            coverage: existing[0].coverage,
+            premium: existing[0].premium,
+            policyholder: existing[0].policyholder,
           }));
           return;
         }
 
-        // If not found after sync, return accepted but pending
-        console.log('⏳ Policy not yet indexed, will appear shortly');
-        res.setHeader('Content-Type', 'application/json');
-        res.status(202).send(JSON.stringify({
-          success: true,
-          message: 'Policy transaction detected, indexing from blockchain...',
-          coverage,
-          premium,
+        // Insert new policy directly
+        const result = await db.insert(policies).values({
+          policyAddress,
+          coverage: coverage.toString(),
+          premium: premium ? premium.toString() : (coverage / 10).toString(),
           policyholder,
+        }).returning();
+
+        console.log('✅ Policy saved successfully:', result[0]);
+        
+        // Trigger async sync in background (non-blocking)
+        syncPolicies().catch((err) => console.error('Background sync failed:', err));
+
+        res.setHeader('Content-Type', 'application/json');
+        res.status(201).send(JSON.stringify({
+          success: true,
+          id: result[0].id,
+          policyAddress: result[0].policyAddress,
+          coverage: result[0].coverage,
+          premium: result[0].premium,
+          policyholder: result[0].policyholder,
         }));
         return;
       } catch (parseError) {
-        // Not a valid save request, continue to legacy flow
+        console.error('Error parsing direct policy save:', parseError);
+        // Fall through to legacy flow
       }
     }
 

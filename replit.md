@@ -208,7 +208,22 @@ To test the complete platform with backend integration:
 
 ## Recent Changes (Replit Setup)
 
-### October 28, 2025
+### October 28, 2025 - Critical Bug Fixes
+
+**Bug Fix Session:**
+- ✅ **Fixed Policy Creation Bug**: Frontend now decodes `PolicyCreated` event from blockchain and sends real policy address to backend (was sending placeholder `0x000...` causing database save failures)
+- ✅ **Fixed Backend Sync Blocking**: Policy service now accepts policies directly without blocking on `syncPolicies()`, making it idempotent and resilient
+- ✅ **Fixed Claims Unit Mismatch**: Claims service now uses exact BigInt arithmetic to convert HBAR ↔ atto-HBAR (10^18), eliminating floating-point precision loss
+- ✅ **Added Input Validation**: Claims service validates all monetary inputs (rejects NaN, Infinity, negative, malformed values)
+- ✅ **Dashboard Auto-Refresh**: Already working (10-second polling), now displays policies correctly after database fixes
+
+**Technical Details:**
+- All database monetary values stored in atto-HBAR (wei) for exact arithmetic
+- Frontend sends decimal HBAR, backend converts using `hbarToAttoHbar()` helper
+- Uses `10n ** 18n` BigInt constant instead of lossy `Math.floor(n * 1e18)`
+- Claims pool initialized with 1 HBAR = `1000000000000000000` atto-HBAR
+
+**Initial Setup:**
 - ✅ Installed Node.js 20
 - ✅ Configured Vite for Replit proxy (host: 0.0.0.0, port: 5000)
 - ✅ Created `.env` file with Hedera testnet contract addresses

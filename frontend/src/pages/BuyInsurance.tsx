@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { parseEther, formatEther } from 'viem'
+import { parseEther, formatEther, decodeEventLog } from 'viem'
 import {
   useWriteContract,
   useWaitForTransactionReceipt,
@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { hederaTestnet, NORMALIZED_ADDRESSES } from '../wagmi'
 
-// Placeholder ABI and address
+// PolicyFactory ABI with PolicyCreated event
 const policyFactoryAbi = [
   {
     inputs: [{ internalType: 'uint256', name: '_coverage', type: 'uint256' }],
@@ -21,6 +21,17 @@ const policyFactoryAbi = [
     outputs: [{ internalType: 'address', name: '', type: 'address' }],
     stateMutability: 'nonpayable',
     type: 'function',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: 'address', name: 'policyAddress', type: 'address' },
+      { indexed: false, internalType: 'uint256', name: 'coverage', type: 'uint256' },
+      { indexed: false, internalType: 'uint256', name: 'premium', type: 'uint256' },
+      { indexed: true, internalType: 'address', name: 'policyholder', type: 'address' },
+    ],
+    name: 'PolicyCreated',
+    type: 'event',
   },
 ]
 const policyFactoryAddress = NORMALIZED_ADDRESSES.POLICY_FACTORY
@@ -131,25 +142,55 @@ export default function BuyInsurance() {
           console.log('Receipt:', receipt)
           
           const backendUrl = import.meta.env.VITE_BACKEND_URL
-          const premiumHbar = parseFloat(premium)
-          const coverageHbar = parseFloat(coverage)
           
-          // For now, we'll use a placeholder policy address and let the backend/indexer find it
-          // In a production system, you'd extract the address from the contract event logs
-          const placeholderPolicyAddress = '0x0000000000000000000000000000000000000000'
+          // Decode PolicyCreated event from receipt logs
+          let policyAddress = '0x0000000000000000000000000000000000000000'
+          let eventCoverage = coverage
+          let eventPremium = premium
           
-          // Save policy to backend - it will search blockchain for the actual address
+          try {
+            // Find the PolicyCreated event in the logs
+            for (const log of receipt.logs) {
+              try {
+                const decoded = decodeEventLog({
+                  abi: policyFactoryAbi,
+                  data: log.data,
+                  topics: log.topics,
+                })
+                
+                if (decoded.eventName === 'PolicyCreated' && decoded.args) {
+                  console.log('📝 Decoded PolicyCreated event:', decoded)
+                  const args = decoded.args as any
+                  policyAddress = args.policyAddress as string
+                  eventCoverage = formatEther(args.coverage as bigint)
+                  eventPremium = formatEther(args.premium as bigint)
+                  console.log(`✅ Found policy address: ${policyAddress}`)
+                  break
+                }
+              } catch (e) {
+                // Not the event we're looking for, continue
+                continue
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ Could not decode event, will use fallback', error)
+          }
+          
+          const premiumHbar = parseFloat(eventPremium)
+          const coverageHbar = parseFloat(eventCoverage)
+          
+          // Save policy to backend with real policy address
           await axios.post(`${backendUrl}/api/v1/policies`, {
             coverage: coverageHbar,
             premium: premiumHbar,
             policyholder: address,
-            policyAddress: placeholderPolicyAddress, // Backend will index this from blockchain
+            policyAddress: policyAddress,
           })
           
           console.log('✅ Policy saved to backend successfully!')
           
           // Show success message and redirect
-          alert(`✅ Insurance policy purchased!\n\nCoverage: ${coverageHbar} HBAR\nPremium: ${premiumHbar} HBAR\n\nYour policy will appear on the dashboard shortly.`)
+          alert(`✅ Insurance policy purchased!\n\nCoverage: ${coverageHbar} HBAR\nPremium: ${premiumHbar} HBAR\nPolicy: ${policyAddress.slice(0, 10)}...${policyAddress.slice(-8)}\n\nRedirecting to dashboard...`)
           
           // Redirect to dashboard
           navigate('/dashboard')
