@@ -153,7 +153,13 @@ For full local development with backend services, you need:
 │   ├── vite.config.ts     # Vite config (configured for Replit)
 │   └── package.json
 │
-├── backend/               # Microservices (NOT running on Replit)
+├── backend-simple/        # Simplified backend (RUNNING on Replit)
+│   ├── server.js          # Express.js server (port 3000)
+│   ├── middleware/        # Authentication middleware
+│   ├── routes/            # API endpoints (policies, claims, admin, oracle)
+│   └── db/                # PostgreSQL connection & schema
+│
+├── backend/               # Original microservices (NOT running - Docker only)
 │   ├── api-gateway/
 │   ├── policy-service/
 │   ├── oracle-service/
@@ -191,11 +197,12 @@ For full local development with backend services, you need:
 
 ## Important Notes
 
-### Replit Limitations
-- ⚠️ **Backend not running**: The microservices backend requires Docker and is not running in this Replit environment
-- ⚠️ **Database not available**: PostgreSQL and Redis are not configured
-- ✅ **Frontend fully functional**: UI works for demonstration and testing wallet connection
+### Replit Status
+- ✅ **Backend RUNNING**: Simplified Express.js backend on port 3000 (no Docker needed)
+- ✅ **Database CONFIGURED**: Using Replit's built-in PostgreSQL
+- ✅ **Frontend fully functional**: React UI with Vite proxy to backend
 - ✅ **Smart contracts deployed**: Contracts are live on Hedera testnet
+- ✅ **Complete E2E flow**: Buy policy → Dashboard → Admin adjust threshold → Claim payout
 
 ### For Full Functionality
 To test the complete platform with backend integration:
@@ -208,20 +215,54 @@ To test the complete platform with backend integration:
 
 ## Recent Changes (Replit Setup)
 
-### October 28, 2025 - Critical Bug Fixes
+### October 28, 2025 - Backend Complete with Security Implementation ✅
 
-**Bug Fix Session:**
-- ✅ **Fixed Policy Creation Bug**: Frontend now decodes `PolicyCreated` event from blockchain and sends real policy address to backend (was sending placeholder `0x000...` causing database save failures)
-- ✅ **Fixed Backend Sync Blocking**: Policy service now accepts policies directly without blocking on `syncPolicies()`, making it idempotent and resilient
-- ✅ **Fixed Claims Unit Mismatch**: Claims service now uses exact BigInt arithmetic to convert HBAR ↔ atto-HBAR (10^18), eliminating floating-point precision loss
-- ✅ **Added Input Validation**: Claims service validates all monetary inputs (rejects NaN, Infinity, negative, malformed values)
-- ✅ **Dashboard Auto-Refresh**: Already working (10-second polling), now displays policies correctly after database fixes
+**NEW: Simplified Backend Running on Replit:**
+- ✅ **Consolidated Backend**: Replaced 6 Docker microservices with single Express.js backend (`backend-simple/`)
+- ✅ **Replit PostgreSQL**: Uses built-in PostgreSQL database (no Docker required)
+- ✅ **Complete API**: All endpoints functional with `/api/v1/` prefix (policies, claims, oracle, admin)
+- ✅ **Vite Proxy**: Frontend configured to proxy API requests to backend on port 3000
+
+**Security Implementation (Architect-Approved):**
+- ✅ **Admin Authentication**: Admin endpoints require `X-Admin-Key` header (middleware at `backend-simple/middleware/auth.js`)
+- ✅ **Protected Admin Routes**: `/api/v1/admin/*` endpoints enforce authentication (adjust threshold, flood level)
+- ✅ **Claims Validation**: 
+  - Requires blockchain transaction hash (`txHash`) to prove execution
+  - Prevents duplicate claims (checks `policy.claimed` flag)
+  - Blocks replay attacks (rejects duplicate transaction hashes)
+- ✅ **Public Endpoints**: Policy listing, claims viewing, oracle data remain accessible without auth
+
+**Architecture:**
+```
+backend-simple/
+├── server.js              # Main Express server (port 3000)
+├── middleware/auth.js     # Admin authentication middleware
+├── routes/
+│   ├── policies.js        # Policy CRUD endpoints
+│   ├── claims.js          # Claims with validation
+│   ├── admin.js           # Protected admin endpoints
+│   └── oracle.js          # Flood level data
+└── db/
+    ├── connection.js      # PostgreSQL connection
+    └── schema.sql         # Database schema
+```
+
+**Environment Variables Required:**
+- `DATABASE_URL` - PostgreSQL connection (auto-provided by Replit)
+- `ADMIN_API_KEY` - Admin authentication key (default: `demo-admin-key-123` for testing)
+
+**Previous Bug Fixes:**
+- ✅ **Fixed Policy Creation Bug**: Frontend decodes `PolicyCreated` event from blockchain
+- ✅ **Fixed Backend Sync Blocking**: Policy service accepts policies without blocking
+- ✅ **Fixed Claims Unit Mismatch**: Uses exact BigInt arithmetic for HBAR ↔ atto-HBAR conversion
+- ✅ **Added Input Validation**: Claims service validates all monetary inputs
+- ✅ **Dashboard Auto-Refresh**: 10-second polling displays policies correctly
 
 **Technical Details:**
 - All database monetary values stored in atto-HBAR (wei) for exact arithmetic
-- Frontend sends decimal HBAR, backend converts using `hbarToAttoHbar()` helper
-- Uses `10n ** 18n` BigInt constant instead of lossy `Math.floor(n * 1e18)`
-- Claims pool initialized with 1 HBAR = `1000000000000000000` atto-HBAR
+- Frontend sends decimal HBAR, backend converts using BigInt (10^18)
+- Admin authentication uses header-based validation (simple for hackathon demo)
+- Claims require blockchain proof via transaction hash
 
 **Initial Setup:**
 - ✅ Installed Node.js 20
