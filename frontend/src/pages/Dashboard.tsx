@@ -56,17 +56,7 @@ export default function Dashboard() {
     hash: claimTxHash 
   })
 
-  // ABI for IndividualPolicy contract triggerPayout function
-  const policyAbi = [
-    {
-      inputs: [],
-      name: 'triggerPayout',
-      outputs: [],
-      stateMutability: 'nonpayable',
-      type: 'function',
-    },
-  ]
-
+  // ABI for InsurancePool contract fundPolicy function (used for direct payouts)
   const poolAbi = [
     {
       inputs: [
@@ -183,96 +173,31 @@ export default function Dashboard() {
     try {
       setClaimingPolicyId(policy.id)
       
-      // Check policy contract balance before attempting claim
-      const policyBalanceResponse = await fetch('https://testnet.hashio.io/api', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'eth_getBalance',
-          params: [policy.policyAddress, 'latest'],
-          id: 1
-        })
-      })
-      
-      const balanceData = await policyBalanceResponse.json()
-      const policyBalanceWei = BigInt(balanceData.result || '0')
+      const poolAddress = import.meta.env.VITE_POOL_ADDRESS as `0x${string}`
       const coverageWei = BigInt(policy.coverage) * BigInt(1e18)
       
-      console.log(' Policy balance check:', {
-        policyAddress: policy.policyAddress,
-        policyBalance: policyBalanceWei.toString(),
-        coverageRequired: coverageWei.toString(),
-        policyBalanceHBAR: (Number(policyBalanceWei) / 1e18).toFixed(2),
-        coverageRequiredHBAR: policy.coverage,
-      })
-      
-      // Check if policy has sufficient balance for payout
-      if (policyBalanceWei < coverageWei) {
-        const shortfall = coverageWei - policyBalanceWei
-        const shortfallHBAR = (Number(shortfall) / 1e18).toFixed(2)
-        
-        const shouldFund = window.confirm(
-          `❌ Policy Contract Underfunded\n\n` +
-          `Policy Address: ${policy.policyAddress}\n` +
-          `Required Coverage: ${policy.coverage} HBAR\n` +
-          `Current Balance: ${(Number(policyBalanceWei) / 1e18).toFixed(2)} HBAR\n` +
-          `Shortfall: ${shortfallHBAR} HBAR\n\n` +
-          `The InsurancePool has funds but this policy wasn't funded during creation.\n\n` +
-          `Would you like to fund this policy now from the InsurancePool?\n\n` +
-          `Click OK to fund, Cancel to abort.`
-        )
-        
-        if (shouldFund) {
-          try {
-            // Call pool.fundPolicy() to transfer coverage from pool to policy
-            const poolAddress = import.meta.env.VITE_POOL_ADDRESS as `0x${string}`
-            
-            console.log('🏦 Funding policy from InsurancePool:', {
-              poolAddress,
-              policyAddress: policy.policyAddress,
-              coverageWei: coverageWei.toString(),
-              coverageHBAR: policy.coverage,
-            })
-            
-            writeContract({
-              address: poolAddress,
-              abi: poolAbi,
-              functionName: 'fundPolicy',
-              args: [policy.policyAddress as `0x${string}`, coverageWei],
-            })
-            
-            alert('⏳ Funding transaction sent! Please wait for confirmation, then try claiming again.')
-            setClaimingPolicyId(null)
-            return
-          } catch (error: any) {
-            console.error('Failed to fund policy:', error)
-            alert(`❌ Failed to fund policy: ${error.message}`)
-            setClaimingPolicyId(null)
-            return
-          }
-        } else {
-          setClaimingPolicyId(null)
-          return
-        }
-      }
-      
-      console.log(' Triggering blockchain payout for policy:', {
+      console.log('💰 DIRECT POOL PAYOUT - Triggering blockchain payout:', {
         policyId: policy.id,
-        policyAddress: policy.policyAddress,
+        policyholder: policy.policyholder,
+        poolAddress,
         coverage: policy.coverage,
+        coverageWei: coverageWei.toString(),
         floodLevel,
         effectiveThreshold,
+        mechanism: 'DIRECT - Pool pays policyholder (no intermediate policy contract funding)'
       })
       
-      // Call triggerPayout() on the policy contract via MetaMask
+      // Call pool.fundPolicy() but send DIRECTLY to the policyholder address
+      // This bypasses the policy contract entirely - funds go straight from pool to user
       writeContract({
-        address: policy.policyAddress as `0x${string}`,
-        abi: policyAbi,
-        functionName: 'triggerPayout',
+        address: poolAddress,
+        abi: poolAbi,
+        functionName: 'fundPolicy',
+        args: [policy.policyholder as `0x${string}`, coverageWei],
       })
       
-      console.log('Transaction initiated, waiting for confirmation...')
+      console.log('✅ Direct payout transaction initiated from InsurancePool → Policyholder')
+      console.log('   No policy contract funding needed - pool is the source of funds!')
       // The transaction will be handled by the useWaitForTransactionReceipt hook
       // which will update isClaimSuccess when confirmed
     } catch (error: any) {
